@@ -1,0 +1,5 @@
+/* vertical mirror effect */
+#webcam {
+    -webkit-transform: scaleX(-1);
+    transform: scaleX(-1);
+}
