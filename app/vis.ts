@@ -46,7 +46,7 @@ class Visualizer {
     for (let i = 0; i < this.hands.handedness.length; i++) {
       const fingers = detectFingers(this.hands.landmarks[i]);
       Object.keys(fingers).forEach((fingerName) => {
-        const finger = fingers[fingerName];
+        const finger = fingers[fingerName].top;
         const startX = 0;
         const startY = finger.intercept;
         const endX = this.ctx.canvas.width;
