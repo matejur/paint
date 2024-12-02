@@ -15,6 +15,14 @@ class Vector {
     return Math.atan2(this.y, this.x) * (180 / Math.PI);
   }
 
+  add(vector: Vector): Vector {
+    return new Vector(this.x + vector.x, this.y + vector.y);
+  }
+
+  subtract(vector: Vector): Vector {
+    return new Vector(this.x - vector.x, this.y - vector.y);
+  }
+
   dot(vector: Vector): number {
     return this.x * vector.x + this.y * vector.y;
   }

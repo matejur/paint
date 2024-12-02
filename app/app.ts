@@ -5,13 +5,9 @@ import {
   transformToCanvasCoords,
 } from "./handModel";
 import { Visualizer } from "./vis";
-import {
-  detectFingers,
-  detectShape,
-  ClickDetector,
-  is_draw_gesture,
-} from "./gestureDetector";
-import { ColorSelector, Menu } from "./menuItems";
+import { detectFingers, detectShape, ClickDetector } from "./gestureDetector";
+import { ColorSelector, Menu, SizeSelector } from "./menuItems";
+import { DrawingController } from "./drawing";
 
 const video = document.getElementById("webcam") as HTMLVideoElement;
 const clearedCanvasElement = document.getElementById(
@@ -28,7 +24,7 @@ const vis = new Visualizer(clearedCtx);
 let handModel: HandLandmarker;
 let menu: Menu;
 let cameraReady = false;
-let debug = true;
+let debug = false;
 
 let WIDTH = 640;
 let HEIGHT = 480;
@@ -70,9 +66,35 @@ function configure() {
   HEIGHT = video.videoHeight;
 
   menu = new Menu(0, 0, WIDTH, 75);
-  menu.addWidget(new ColorSelector("red"));
-  menu.addWidget(new ColorSelector("blue"));
-  menu.addWidget(new ColorSelector("green"));
+  const colorSection = menu.createSubsection();
+  colorSection.addWidget(new ColorSelector("red"));
+  colorSection.addWidget(new ColorSelector("blue"));
+  colorSection.addWidget(new ColorSelector("green"));
+
+  const sizeSection = menu.createSubsection();
+  sizeSection.addWidget(new SizeSelector(5));
+  sizeSection.addWidget(new SizeSelector(10));
+  sizeSection.addWidget(new SizeSelector(15));
+
+  const utilsSection = menu.createSubsection();
+  utilsSection.addWidget({
+    applyToCtx: (ctx: CanvasRenderingContext2D) => {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+    },
+    draw: (
+      ctx: CanvasRenderingContext2D,
+      x: number,
+      y: number,
+      width: number,
+      height: number
+    ) => {
+      ctx.beginPath();
+      ctx.rect(x, y, width, height);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.50)";
+      ctx.fill();
+    },
+    selected: false,
+  });
 }
 
 async function main() {
@@ -89,12 +111,22 @@ async function main() {
   requestAnimationFrame(loop);
 }
 
+window.addEventListener("keydown", (e) => {
+  if (e.key === "d") {
+    debug = !debug;
+  }
+});
+
+const drawingController = new DrawingController(drawingCtx, clearedCtx);
 const rightGestureDetector = new ClickDetector("Right");
 rightGestureDetector.onClick = (x, y) => {
   menu.handleClick(drawingCtx, x, y);
-  drawingCtx.beginPath();
-  drawingCtx.rect(x, y, 10, 10);
-  drawingCtx.fill();
+  drawingController.handleClick(x, y);
+  if (debug) {
+    drawingCtx.beginPath();
+    drawingCtx.rect(x, y, 10, 10);
+    drawingCtx.fill();
+  }
 };
 
 async function loop() {
@@ -119,13 +151,7 @@ async function loop() {
 
   rightGestureDetector.update(hands);
 
-  const [drawing, vector] = is_draw_gesture(hands, "Right");
-  if (drawing) {
-    drawingCtx.beginPath();
-    drawingCtx.arc(vector.x, vector.y, 5, 0, 2 * Math.PI);
-    drawingCtx.fill();
-  }
-
+  drawingController.update(hands);
   menu.draw(clearedCtx);
   requestAnimationFrame(loop);
 }

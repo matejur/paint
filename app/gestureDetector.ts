@@ -1,6 +1,7 @@
 import { HandLandmarkerResult, Landmark } from "@mediapipe/tasks-vision";
 import { getLandmarksByName } from "./handModel";
 import { Vector } from "./vector";
+import { Figure, Rectangle } from "./drawing";
 
 const INDEX_TIP = 8;
 const THUMB = [1, 2, 3, 4];
@@ -125,7 +126,7 @@ function detectFingers(landmarks: Landmark[]): HandFingers {
 
   return hand;
 }
-function detectShape(results: HandLandmarkerResult): Shape | undefined {
+function detectShape(results: HandLandmarkerResult): Figure | undefined {
   const leftLandmarks = getLandmarksByName(results, "Left");
   const rightLandmarks = getLandmarksByName(results, "Right");
 
@@ -148,19 +149,43 @@ function detectShape(results: HandLandmarkerResult): Shape | undefined {
   const angle2 = leftIndex.direction.angleTo(rightIndex.direction);
 
   if (angle1 > 170 && angle2 > 170) {
-    return "RECTANGLE";
+    return new Rectangle([
+      intersect(leftThumb, rightIndex),
+      intersect(rightThumb, leftIndex),
+    ]);
   } else if (angle1 > 170 && angle2 > 70 && angle2 < 90) {
-    return "TRIANGLE";
+    return;
   }
 }
 
-function is_draw_gesture(
+function intersect(a: FingerPart, b: FingerPart): Vector {
+  const x = (a.intercept - b.intercept) / (b.slope - a.slope);
+  const y = a.slope * x + a.intercept;
+  return new Vector(x, y);
+}
+
+function isPinching(
   results: HandLandmarkerResult,
   hand: HandName
 ): [boolean, Vector] {
+  const [zoom, indexTip, thumbTip] = zoomGesture(results, hand);
+  const distance = indexTip.distanceTo(thumbTip);
+  if (zoom && distance < 50) {
+    const middle_x = (thumbTip.x + indexTip.x) / 2;
+    const middle_y = (thumbTip.y + indexTip.y) / 2;
+    return [true, new Vector(middle_x, middle_y)];
+  }
+
+  return [false, new Vector(0, 0)];
+}
+
+function zoomGesture(
+  results: HandLandmarkerResult,
+  hand: HandName
+): [boolean, Vector, Vector] {
   const landmarks = getLandmarksByName(results, hand);
   if (!landmarks) {
-    return [false, new Vector(0, 0)];
+    return [false, new Vector(0, 0), new Vector(0, 0)];
   }
 
   const fingers = detectFingers(landmarks);
@@ -168,26 +193,15 @@ function is_draw_gesture(
   const ring_curled = curled_finger(fingers.ring);
   const pinky_curled = curled_finger(fingers.pinky);
 
-  if (
-    touching(fingers.thumb, fingers.index) &&
-    middle_curled &&
-    ring_curled &&
-    pinky_curled
-  ) {
-    const middle_x = (fingers.thumb.tip.x + fingers.index.tip.x) / 2;
-    const middle_y = (fingers.thumb.tip.y + fingers.index.tip.y) / 2;
-    return [true, new Vector(middle_x, middle_y)];
+  if (middle_curled && ring_curled && pinky_curled) {
+    return [true, fingers.index.tip, fingers.thumb.tip];
   } else {
-    return [false, new Vector(0, 0)];
+    return [false, new Vector(0, 0), new Vector(0, 0)];
   }
 }
 
 function curled_finger(finger: Finger): boolean {
   return finger.middle.direction.y > 0;
-}
-
-function touching(finger1: Finger, finger2: Finger): boolean {
-  return finger1.tip.distanceTo(finger2.tip) < 50;
 }
 
 function is_select_gesture(fingers: HandFingers): boolean {
@@ -199,61 +213,4 @@ function is_select_gesture(fingers: HandFingers): boolean {
   return !index_curled && middle_curled && ring_curled && pinky_curled;
 }
 
-// function is_thumbs_up(fingers: HandFingers): boolean {
-//   const thumb = fingers.thumb.top;
-//   const index = fingers.index.base;
-//   const middle = fingers.middle.base;
-//   const ring = fingers.ring.base;
-//   const pinky = fingers.pinky.base;
-
-//   if (thumb.direction.y > 0) {
-//     return false;
-//   }
-
-//   const thumb_index_angle = thumb.direction.angleTo(index.direction);
-//   if (thumb_index_angle < 60 || thumb_index_angle > 120) {
-//     return false;
-//   }
-
-//   const index_middle_parallel = Math.abs(index.slope - middle.slope) < 0.5;
-//   const middle_ring_parallel = Math.abs(middle.slope - ring.slope) < 0.5;
-//   const ring_pinky_parallel = Math.abs(ring.slope - pinky.slope) < 0.5;
-
-//   if (!index_middle_parallel || !middle_ring_parallel || !ring_pinky_parallel) {
-//     return false;
-//   }
-
-//   const index_curled = curled_finger(fingers.index);
-//   const middle_curled = curled_finger(fingers.middle);
-//   const ring_curled = curled_finger(fingers.ring);
-//   const pinky_curled = curled_finger(fingers.pinky);
-
-//   return index_curled && middle_curled && ring_curled && pinky_curled;
-// }
-
-// function is_thumbs_up(fingers: HandFingers): boolean {
-//   const thumb = fingers.thumb.top;
-//   const index = fingers.index.base;
-//   const middle = fingers.middle.base;
-//   const ring = fingers.ring.base;
-//   const pinky = fingers.pinky.base;
-//   if (thumb.direction.y > 0) {
-//     return false;
-//   }
-//   const thumb_index_angle = thumb.direction.angleTo(index.direction);
-//   if (thumb_index_angle < 60 || thumb_index_angle > 120) {
-//     return false;
-//   }
-//   const index_middle_parallel = Math.abs(index.slope - middle.slope) < 0.5;
-//   const middle_ring_parallel = Math.abs(middle.slope - ring.slope) < 0.5;
-//   const ring_pinky_parallel = Math.abs(ring.slope - pinky.slope) < 0.5;
-//   if (!index_middle_parallel || !middle_ring_parallel || !ring_pinky_parallel) {
-//     return false;
-//   }
-//   const index_curled = curled_finger(fingers.index);
-//   const middle_curled = curled_finger(fingers.middle);
-//   const ring_curled = curled_finger(fingers.ring);
-//   const pinky_curled = curled_finger(fingers.pinky);
-//   return index_curled && middle_curled && ring_curled && pinky_curled;
-// }
-export { detectFingers, detectShape, is_draw_gesture, ClickDetector };
+export { detectFingers, detectShape, isPinching, ClickDetector, zoomGesture };
