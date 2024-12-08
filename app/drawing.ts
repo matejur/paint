@@ -1,156 +1,106 @@
 import { HandLandmarkerResult } from "@mediapipe/tasks-vision";
-import { detectShape, isPinching, zoomGesture } from "./gestureDetector";
+import {
+  detectShape,
+  isPinching,
+  isThumbsUp,
+  zoomGesture,
+} from "./gestureDetector";
 import { Vector } from "./vector";
-
-interface Figure {
-  originalCoords: Vector[];
-  coords: Vector[];
-  draw(ctx: CanvasRenderingContext2D): void;
-  setCenter(center: Vector): void;
-  setScale(tip1: Vector, tip2: Vector): void;
-}
-
-class Rectangle implements Figure {
-  originalCoords: Vector[];
-  coords: Vector[];
-
-  constructor(coords: Vector[]) {
-    this.coords = coords;
-    this.originalCoords = coords;
-  }
-
-  draw(ctx: CanvasRenderingContext2D) {
-    ctx.beginPath();
-    ctx.rect(
-      this.coords[0].x,
-      this.coords[0].y,
-      this.coords[1].x - this.coords[0].x,
-      this.coords[1].y - this.coords[0].y
-    );
-    ctx.fill();
-  }
-
-  setCenter(center: Vector): void {
-    const width = this.coords[1].x - this.coords[0].x;
-    const height = this.coords[1].y - this.coords[0].y;
-
-    this.coords[0].x = center.x - width / 2;
-    this.coords[0].y = center.y - height / 2;
-    this.coords[1].x = center.x + width / 2;
-    this.coords[1].y = center.y + height / 2;
-
-    this.originalCoords = this.coords;
-  }
-
-  setScale(tip1: Vector, tip2: Vector): void {
-    const center = new Vector(
-      (this.originalCoords[0].x + this.originalCoords[1].x) / 2,
-      (this.originalCoords[0].y + this.originalCoords[1].y) / 2
-    );
-    const width = this.originalCoords[1].x - this.originalCoords[0].x;
-    const height = this.originalCoords[1].y - this.originalCoords[0].y;
-
-    const diff = tip1.subtract(tip2);
-    const newWidth = Math.abs(diff.x);
-    const newHeight = Math.abs(diff.y);
-
-    this.coords[0].x = center.x - newWidth / 2;
-    this.coords[0].y = center.y - newHeight / 2;
-    this.coords[1].x = center.x + newWidth / 2;
-    this.coords[1].y = center.y + newHeight / 2;
-  }
-}
+import { Polygon } from "./geometry";
 
 class DrawingController {
-  drawingCtx: CanvasRenderingContext2D;
-  clearedCtx: CanvasRenderingContext2D;
+  ctx: CanvasRenderingContext2D;
   isDrawing = false;
   eraserSize = 40;
 
-  previousPosition: Vector = new Vector(0, 0);
+  previousLeftPosition: Vector | null = null;
+  previousRightPosition: Vector | null = null;
 
-  shape: Figure | null = null;
-  isPlacingShape = false;
+  allShapes: Polygon[] = [];
+  currentShape: Polygon | null = null;
+  isEditingShape = false;
 
-  constructor(
-    drawingCtx: CanvasRenderingContext2D,
-    clearedCtx: CanvasRenderingContext2D
-  ) {
-    this.drawingCtx = drawingCtx;
-    this.clearedCtx = clearedCtx;
+  currentColor = "black";
+
+  constructor(ctx: CanvasRenderingContext2D) {
+    this.ctx = ctx;
   }
 
-  handleClick(x: number, y: number) {
-    if (this.isPlacingShape) {
-      this.isPlacingShape = false;
-      this.shape.draw(this.drawingCtx);
-      this.shape = null;
+  handleRightClick(pos: Vector) {
+    if (this.isEditingShape) {
+      this.currentShape.addVertex(pos);
     }
   }
 
-  handleDraw(drawing: boolean, position: Vector) {
-    if (this.isPlacingShape) {
-      return;
-    }
-    if (!this.isDrawing && drawing) {
-      this.isDrawing = true;
-      this.drawingCtx.beginPath();
-    } else if (this.isDrawing && !drawing) {
-      this.isDrawing = false;
-      this.drawingCtx.closePath();
-    }
-    if (this.isDrawing) {
-      if (this.previousPosition.distanceTo(position) > 10) {
-        this.drawingCtx.lineTo(Math.round(position.x), Math.round(position.y));
-        this.drawingCtx.stroke();
-        this.previousPosition = position;
-      }
+  handleLeftClick(pos: Vector) {
+    if (this.isEditingShape) {
+      this.currentShape.removeVertex(pos);
     }
   }
+
+  setColor(color: string) {
+    this.currentColor = color;
+  }
+
+  // handleDraw(drawing: boolean, position: Vector) {
+  //   if (this.isPlacingShape) {
+  //     return;
+  //   }
+  //   if (!this.isDrawing && drawing) {
+  //     this.isDrawing = true;
+  //     this.drawingCtx.beginPath();
+  //   } else if (this.isDrawing && !drawing) {
+  //     this.isDrawing = false;
+  //     this.drawingCtx.closePath();
+  //   }
+  //   if (this.isDrawing) {
+  //     if (this.previousPosition.distanceTo(position) > 10) {
+  //       this.drawingCtx.lineTo(Math.round(position.x), Math.round(position.y));
+  //       this.drawingCtx.stroke();
+  //       this.previousPosition = position;
+  //     }
+  //   }
+  // }
 
   handleShapePlacement(hands: HandLandmarkerResult) {
-    if (!this.isPlacingShape) {
+    if (!this.isEditingShape) {
       const shape = detectShape(hands);
       if (shape) {
-        this.shape = shape;
-        this.isPlacingShape = true;
+        this.currentShape = shape;
+        this.isEditingShape = true;
+        this.allShapes.push(shape);
       }
     }
-    if (!this.shape) {
-      return;
-    }
-
-    this.shape.draw(this.clearedCtx);
   }
 
   update(hands: HandLandmarkerResult) {
-    const [drawing, position] = isPinching(hands, "Right");
-    this.handleDraw(drawing, position);
+    const [rightPinch, rightPosition] = isPinching(hands, "Right");
+    const [leftPinch, leftPosition] = isPinching(hands, "Left");
+    const thumbsUp = isThumbsUp(hands, "Right");
 
-    const [erasing, eraserPosition] = isPinching(hands, "Left");
-    if (erasing) {
-      this.drawingCtx.clearRect(
-        eraserPosition.x - this.eraserSize / 2,
-        eraserPosition.y - this.eraserSize / 2,
-        this.eraserSize,
-        this.eraserSize
-      );
-    }
-
-    if ((!drawing && !erasing) || this.isPlacingShape) {
-      this.handleShapePlacement(hands);
-
-      if (this.shape) {
-        if (drawing) {
-          this.shape.setCenter(position);
-        }
-        const [zoom, indexTip, thumbTip] = zoomGesture(hands, "Left");
-        if (zoom) {
-          this.shape.setScale(indexTip, thumbTip);
-        }
+    if (this.isEditingShape) {
+      this.currentShape.color = this.currentColor;
+      if (thumbsUp) {
+        this.currentShape.isEditing = false;
+        this.isEditingShape = false;
+        this.currentShape = null;
+      } else if (leftPinch && this.previousLeftPosition) {
+        const movement = leftPosition.sub(this.previousLeftPosition);
+        this.currentShape.move(movement);
+      } else if (rightPinch && this.previousRightPosition) {
+        this.currentShape.moveClosestVertex(this.previousRightPosition);
       }
     }
+
+    for (let shape of this.allShapes) {
+      shape.draw(this.ctx);
+    }
+
+    this.handleShapePlacement(hands);
+
+    this.previousLeftPosition = leftPinch ? leftPosition : null;
+    this.previousRightPosition = rightPinch ? rightPosition : null;
   }
 }
 
-export { DrawingController, Figure, Rectangle };
+export { DrawingController, Polygon };

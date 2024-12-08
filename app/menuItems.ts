@@ -1,3 +1,6 @@
+import { DrawingController } from "./drawing";
+import { Vector } from "./vector";
+
 class Menu {
   x: number;
   y: number;
@@ -29,9 +32,9 @@ class Menu {
     return subsection;
   }
 
-  handleClick(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  handleClick(controller: DrawingController, pos: Vector) {
     for (let subsection of this.subsections) {
-      subsection.handleClick(ctx, x, y);
+      subsection.handleClick(controller, pos);
     }
   }
 
@@ -63,12 +66,12 @@ class Subsection {
     this.widgets.push(widget);
   }
 
-  handleClick(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  handleClick(controller: DrawingController, pos: Vector) {
     if (
-      x < this.x ||
-      x > this.x + this.width ||
-      y < this.y ||
-      y > this.y + this.height
+      pos.x < this.x ||
+      pos.x > this.x + this.width ||
+      pos.y < this.y ||
+      pos.y > this.y + this.height
     ) {
       return;
     }
@@ -79,13 +82,13 @@ class Subsection {
 
     for (let widget of this.widgets) {
       if (
-        x > currentX &&
-        x < currentX + widget_size &&
-        y > currentY &&
-        y < currentY + widget_size
+        pos.x > currentX &&
+        pos.x < currentX + widget_size &&
+        pos.y > currentY &&
+        pos.y < currentY + widget_size
       ) {
         widget.selected = true;
-        widget.applyToCtx(ctx);
+        widget.applyToCtrl(controller);
       } else {
         widget.selected = false;
       }
@@ -126,7 +129,7 @@ interface Widget {
     width: number,
     height: number
   ): void;
-  applyToCtx(ctx: CanvasRenderingContext2D): void;
+  applyToCtrl(controller: DrawingController): void;
 }
 
 class ColorSelector implements Widget {
@@ -150,39 +153,38 @@ class ColorSelector implements Widget {
     ctx.fill();
   }
 
-  applyToCtx(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = this.color;
-    ctx.strokeStyle = this.color;
+  applyToCtrl(controller: DrawingController): void {
+    controller.setColor(this.color);
   }
 }
 
-class SizeSelector implements Widget {
-  selected: boolean = false;
-  size: number;
+// class SizeSelector implements Widget {
+//   selected: boolean = false;
+//   size: number;
 
-  constructor(size: number) {
-    this.size = size;
-  }
+//   constructor(size: number) {
+//     this.size = size;
+//   }
 
-  draw(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    width: number,
-    height: number
-  ) {
-    ctx.beginPath();
-    ctx.fillStyle = "black";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = "30px Arial";
-    ctx.fillText(this.size.toString(), x + width / 2, y + height / 2);
-    ctx.fill();
-  }
+//   draw(
+//     ctx: CanvasRenderingContext2D,
+//     x: number,
+//     y: number,
+//     width: number,
+//     height: number
+//   ) {
+//     ctx.beginPath();
+//     ctx.fillStyle = "black";
+//     ctx.textAlign = "center";
+//     ctx.textBaseline = "middle";
+//     ctx.font = "30px Arial";
+//     ctx.fillText(this.size.toString(), x + width / 2, y + height / 2);
+//     ctx.fill();
+//   }
 
-  applyToCtx(ctx: CanvasRenderingContext2D): void {
-    ctx.lineWidth = this.size;
-  }
-}
+//   applyToCtx(ctx: CanvasRenderingContext2D): void {
+//     ctx.lineWidth = this.size;
+//   }
+// }
 
-export { Menu, Widget, ColorSelector, SizeSelector };
+export { Menu, Widget, ColorSelector };

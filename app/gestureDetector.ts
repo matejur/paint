@@ -1,7 +1,7 @@
 import { HandLandmarkerResult, Landmark } from "@mediapipe/tasks-vision";
 import { getLandmarksByName } from "./handModel";
 import { Vector } from "./vector";
-import { Figure, Rectangle } from "./drawing";
+import { Polygon } from "./drawing";
 
 const INDEX_TIP = 8;
 const THUMB = [1, 2, 3, 4];
@@ -37,7 +37,7 @@ class FingerPart {
   constructor(a: Landmark, b: Landmark) {
     this.slope = (b.y - a.y) / (b.x - a.x);
     this.intercept = a.y - this.slope * a.x;
-    this.direction = new Vector(b.x - a.x, b.y - a.y);
+    this.direction = new Vector(b.x - a.x, b.y - a.y).normalize();
     this.depth = (a.z + b.z) / 2;
   }
 }
@@ -52,7 +52,7 @@ interface Finger {
 class ClickDetector {
   handName: HandName;
   depthHistory: number[];
-  onClick: (x: number, y: number) => void;
+  onClick: (pos: Vector) => void;
 
   historySize: number = 20;
 
@@ -69,8 +69,8 @@ class ClickDetector {
     }
 
     const fingers = detectFingers(landmarks);
-    const select = is_select_gesture(fingers);
-
+    const select = isSelectGesture(fingers);
+    console.log(select);
     if (select) {
       this.depthHistory.push(fingers.index.top.depth);
       if (this.depthHistory.length > this.historySize) {
@@ -104,7 +104,9 @@ class ClickDetector {
         first_std * 1000 < 3 &&
         second_std * 1000 > 5
       ) {
-        this.onClick(landmarks[INDEX_TIP].x, landmarks[INDEX_TIP].y);
+        this.onClick(
+          new Vector(landmarks[INDEX_TIP].x, landmarks[INDEX_TIP].y)
+        );
         this.depthHistory = [];
       }
     }
@@ -126,7 +128,7 @@ function detectFingers(landmarks: Landmark[]): HandFingers {
 
   return hand;
 }
-function detectShape(results: HandLandmarkerResult): Figure | undefined {
+function detectShape(results: HandLandmarkerResult): Polygon | undefined {
   const leftLandmarks = getLandmarksByName(results, "Left");
   const rightLandmarks = getLandmarksByName(results, "Right");
 
@@ -149,12 +151,18 @@ function detectShape(results: HandLandmarkerResult): Figure | undefined {
   const angle2 = leftIndex.direction.angleTo(rightIndex.direction);
 
   if (angle1 > 170 && angle2 > 170) {
-    return new Rectangle([
-      intersect(leftThumb, rightIndex),
-      intersect(rightThumb, leftIndex),
-    ]);
+    const topLeft = intersect(leftThumb, leftIndex);
+    const bottomRight = intersect(rightThumb, rightIndex);
+
+    const topRight = new Vector(bottomRight.x, topLeft.y);
+    const bottomLeft = new Vector(topLeft.x, bottomRight.y);
+    return new Polygon([topLeft, topRight, bottomRight, bottomLeft]);
   } else if (angle1 > 170 && angle2 > 70 && angle2 < 90) {
-    return;
+    const peak = intersect(leftIndex, rightIndex);
+    const left = intersect(leftThumb, leftIndex);
+    const right = intersect(rightThumb, rightIndex);
+
+    return new Polygon([left, peak, right]);
   }
 }
 
@@ -201,16 +209,53 @@ function zoomGesture(
 }
 
 function curled_finger(finger: Finger): boolean {
-  return finger.middle.direction.y > 0;
+  return finger.base.direction.dot(finger.top.direction) < 0;
 }
 
-function is_select_gesture(fingers: HandFingers): boolean {
+function isSelectGesture(fingers: HandFingers): boolean {
+  const index_down = fingers.index.middle.direction.y > 0;
+  const middle_down = fingers.middle.middle.direction.y > 0;
+  const ring_down = fingers.ring.middle.direction.y > 0;
+  const pinky_down = fingers.pinky.middle.direction.y > 0;
+
+  return !index_down && middle_down && ring_down && pinky_down;
+}
+
+function below(fingerA: Finger, fingerB: Finger): boolean {
+  return fingerA.tip.y > fingerB.tip.y;
+}
+
+function isThumbsUp(results: HandLandmarkerResult, hand: HandName): boolean {
+  const landmarks = getLandmarksByName(results, hand);
+  if (!landmarks) {
+    return false;
+  }
+
+  const fingers = detectFingers(landmarks);
+  if (fingers.thumb.top.direction.y > -0.9) return false;
+  if (Math.abs(fingers.index.top.direction.y) > 0.3) return false;
+
+  const thumb_curled = curled_finger(fingers.thumb);
   const index_curled = curled_finger(fingers.index);
   const middle_curled = curled_finger(fingers.middle);
   const ring_curled = curled_finger(fingers.ring);
   const pinky_curled = curled_finger(fingers.pinky);
 
-  return !index_curled && middle_curled && ring_curled && pinky_curled;
+  return (
+    !thumb_curled &&
+    index_curled &&
+    middle_curled &&
+    ring_curled &&
+    pinky_curled &&
+    below(fingers.index, fingers.thumb)
+  );
 }
 
-export { detectFingers, detectShape, isPinching, ClickDetector, zoomGesture };
+export {
+  detectFingers,
+  detectShape,
+  isPinching,
+  ClickDetector,
+  zoomGesture,
+  isThumbsUp,
+};

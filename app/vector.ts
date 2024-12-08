@@ -19,7 +19,21 @@ class Vector {
     return new Vector(this.x + vector.x, this.y + vector.y);
   }
 
-  subtract(vector: Vector): Vector {
+  addInPlace(vector: Vector): void {
+    this.x += vector.x;
+    this.y += vector.y;
+  }
+
+  mul(scalar: number): Vector {
+    return new Vector(this.x * scalar, this.y * scalar);
+  }
+
+  normalize(): Vector {
+    const magnitude = this.magnitude();
+    return new Vector(this.x / magnitude, this.y / magnitude);
+  }
+
+  sub(vector: Vector): Vector {
     return new Vector(this.x - vector.x, this.y - vector.y);
   }
 
