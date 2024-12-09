@@ -59,7 +59,7 @@ class Circle implements Shape {
     ctx.arc(this.center.x, this.center.y, this.radius, 0, 2 * Math.PI);
     ctx.fill();
 
-    ctx.globalAlpha = 0.9;
+    ctx.globalAlpha = 0.95;
     if (this.isEditing) {
       ctx.fillStyle = "red";
       ctx.beginPath();
@@ -119,7 +119,7 @@ class Polygon implements Shape {
     ctx.closePath();
     ctx.fill();
 
-    ctx.globalAlpha = 0.9;
+    ctx.globalAlpha = 0.95;
 
     if (!this.isEditing) {
       return;

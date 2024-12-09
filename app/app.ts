@@ -146,8 +146,8 @@ async function loop() {
     vis.setHands(hands);
     vis.drawConnections();
     vis.drawPoints();
-    vis.drawDebugLines();
-    vis.drawGraph(depthHistory);
+    //vis.drawDebugLines();
+    //vis.drawGraph(depthHistory);
     //vis.drawFingerLines();
     ctx.restore();
   }

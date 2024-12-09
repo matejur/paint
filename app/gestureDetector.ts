@@ -84,7 +84,7 @@ class GestureDetector {
       this.onDragStop();
     }
 
-    const select = isSelectGesture(fingers, handSize * 0.5);
+    const select = isSelectGesture(fingers, handSize * 0.3);
     if (select) {
       this.depthHistory.push(fingers.index.top.depth);
       if (this.depthHistory.length > this.historySize) {
@@ -146,9 +146,9 @@ function detectShape(
     if (rightLandmarks) {
       const rightFingers = detectFingers(rightLandmarks);
 
-      const middleCurled = curled_finger(rightFingers.middle);
-      const ringCurled = curled_finger(rightFingers.ring);
-      const pinkyCurled = curled_finger(rightFingers.pinky);
+      const middleUp = rightFingers.middle.top.direction.y < -0.5;
+      const ringUp = rightFingers.ring.top.direction.y < -0.5;
+      const pinkyUp = rightFingers.pinky.top.direction.y < -0.5;
 
       const wrist = new Vector(rightLandmarks[0].x, rightLandmarks[0].y);
       const indexStart = new Vector(
@@ -161,7 +161,7 @@ function detectShape(
         rightFingers.thumb.tip.distanceTo(rightFingers.index.tip) <
         0.25 * handSize;
 
-      if (thumbIndexTouching && !middleCurled && !ringCurled && !pinkyCurled) {
+      if (thumbIndexTouching && middleUp && ringUp && pinkyUp) {
         const center = new Vector(
           (rightLandmarks[INDEX[1]].x + rightLandmarks[THUMB[1]].x) / 2,
           (rightLandmarks[INDEX[1]].y + rightLandmarks[THUMB[1]].y) / 2
@@ -262,8 +262,16 @@ function isSelectGesture(
 
   const thumb_index_dist = fingers.thumb.tip.distanceTo(fingers.index.tip);
 
+  console.log(
+    index_down,
+    middle_down,
+    ring_down,
+    pinky_down,
+    thumb_index_dist > thumbIndexThreshold
+  );
+
   return (
-    !index_down &&
+    //!index_down &&
     middle_down &&
     ring_down &&
     pinky_down &&
