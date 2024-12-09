@@ -16,6 +16,8 @@ async function createHandModel(): Promise<HandLandmarker> {
     },
     runningMode: "VIDEO",
     numHands: 2,
+    minHandDetectionConfidence: 0.8,
+    minHandPresenceConfidence: 0.8,
   });
 
   return handLandmarker;

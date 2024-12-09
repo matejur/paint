@@ -26,6 +26,25 @@ class Visualizer {
     }
   }
 
+  drawGraph(numbers: number[]) {
+    const width = this.ctx.canvas.width;
+    const height = this.ctx.canvas.height;
+    const step = width / numbers.length;
+    const max = 0;
+    const min = -0.1;
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(0, height);
+    for (let i = 0; i < numbers.length; i++) {
+      const x = i * step;
+      const y = height - ((numbers[i] - min) / (max - min)) * height;
+      this.ctx.lineTo(x, y);
+    }
+    this.ctx.lineTo(width, height);
+    this.ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
+    this.ctx.fill();
+  }
+
   drawConnections() {
     for (let i = 0; i < this.hands.handedness.length; i++) {
       const hand = this.hands.handedness[i][0].categoryName;
@@ -59,6 +78,42 @@ class Visualizer {
         this.ctx.lineWidth = 4;
         this.ctx.stroke();
       });
+    }
+  }
+
+  drawDebugLines() {
+    for (let i = 0; i < this.hands.handedness.length; i++) {
+      const hand = this.hands.handedness[i][0].categoryName;
+      const landmarks = this.hands.landmarks[i];
+
+      const fingers = detectFingers(landmarks);
+      const dist = fingers.thumb.tip.distanceTo(fingers.index.tip);
+      this.ctx.beginPath();
+      this.ctx.moveTo(fingers.thumb.tip.x, fingers.thumb.tip.y);
+      this.ctx.lineTo(fingers.index.tip.x, fingers.index.tip.y);
+      this.ctx.strokeStyle = "green";
+      this.ctx.lineWidth = 4;
+      this.ctx.stroke();
+
+      this.ctx.beginPath();
+      this.ctx.arc(
+        (landmarks[6].x + landmarks[2].x) / 2,
+        (landmarks[6].y + landmarks[2].y) / 2,
+        dist / 2,
+        0,
+        2 * Math.PI
+      );
+      this.ctx.stroke();
+
+      this.ctx.font = "30px Arial";
+      this.ctx.fillStyle = "white";
+      this.ctx.fillText(
+        dist.toFixed(2),
+        (fingers.index.tip.x + fingers.thumb.tip.x) / 2,
+        (fingers.index.tip.y + fingers.thumb.tip.y) / 2
+      );
+
+      this.ctx.stroke();
     }
   }
 }

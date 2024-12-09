@@ -1,57 +1,13 @@
 import { DrawingController } from "./drawing";
 import { Vector } from "./vector";
 
+const horizontalPadding = 10;
+const verticalPadding = 10;
 class Menu {
   x: number;
   y: number;
   width: number;
   height: number;
-
-  subsections: Subsection[] = [];
-
-  constructor(x: number, y: number, width: number, height: number) {
-    this.x = x;
-    this.y = y;
-    this.width = width;
-    this.height = height;
-  }
-
-  createSubsection() {
-    const totalSubsections = this.subsections.length + 1;
-    const width = this.width / totalSubsections;
-    const x = this.x + width * this.subsections.length;
-
-    for (let i = 0; i < this.subsections.length; i++) {
-      const subsection = this.subsections[i];
-      subsection.width = width;
-      subsection.x = this.x + width * i;
-    }
-
-    const subsection = new Subsection(x, this.y, width, this.height);
-    this.subsections.push(subsection);
-    return subsection;
-  }
-
-  handleClick(controller: DrawingController, pos: Vector) {
-    for (let subsection of this.subsections) {
-      subsection.handleClick(controller, pos);
-    }
-  }
-
-  draw(ctx: CanvasRenderingContext2D) {
-    for (let subsection of this.subsections) {
-      subsection.draw(ctx);
-    }
-  }
-}
-
-class Subsection {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-
-  padding: number = 10;
 
   widgets: Widget[] = [];
 
@@ -62,129 +18,189 @@ class Subsection {
     this.height = height;
   }
 
-  addWidget(widget: Widget) {
-    this.widgets.push(widget);
+  setBBbox(x: number, y: number, width: number, height: number) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+    this.recalculateWidgetPositions();
   }
 
-  handleClick(controller: DrawingController, pos: Vector) {
+  recalculateWidgetPositions() {
+    const numWidgets = this.widgets.length;
+    const widgetWidth =
+      (this.width - horizontalPadding * (numWidgets + 1)) / numWidgets;
+
+    let startX = this.x + horizontalPadding;
+    for (let widget of this.widgets) {
+      widget.setBbox(
+        startX,
+        this.y + verticalPadding,
+        widgetWidth,
+        this.height
+      );
+      startX += widgetWidth + horizontalPadding;
+    }
+  }
+
+  addWidget(widget: Widget) {
+    this.widgets.push(widget);
+    this.recalculateWidgetPositions();
+  }
+
+  handleDrag(pos: Vector): boolean {
+    for (let widget of this.widgets) {
+      if (widget.handleDrag(pos)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  draw(ctx: CanvasRenderingContext2D) {
+    for (let widget of this.widgets) {
+      widget.draw(ctx);
+    }
+  }
+}
+
+interface Widget {
+  controller: DrawingController;
+  draw(ctx: CanvasRenderingContext2D): void;
+  setBbox(x: number, y: number, width: number, height: number): void;
+  updateController(): void;
+  handleDrag(pos: Vector): boolean;
+}
+
+class ColorSelector implements Widget {
+  controller: DrawingController;
+  red_slider = new Slider();
+  green_slider = new Slider();
+  blue_slider = new Slider();
+
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+
+  constructor(controller: DrawingController) {
+    this.controller = controller;
+    this.red_slider.percent = 0;
+    this.green_slider.percent = 0.5;
+    this.blue_slider.percent = 1;
+    this.updateController();
+  }
+
+  setBbox(x: number, y: number, width: number, height: number) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+
+    const sliderSectionWidth = 0.9 * (this.width - horizontalPadding * 4);
+    const sliderWidth = sliderSectionWidth / 3;
+
+    this.red_slider.x = x + horizontalPadding;
+    this.red_slider.y = y + verticalPadding;
+    this.red_slider.width = sliderWidth;
+    this.red_slider.height = height - verticalPadding * 2;
+
+    this.green_slider.x =
+      x + horizontalPadding + sliderWidth + horizontalPadding;
+    this.green_slider.y = y + verticalPadding;
+    this.green_slider.width = sliderWidth;
+    this.green_slider.height = height - verticalPadding * 2;
+
+    this.blue_slider.x =
+      x + horizontalPadding + 2 * (sliderWidth + horizontalPadding);
+    this.blue_slider.y = y + verticalPadding;
+    this.blue_slider.width = sliderWidth;
+    this.blue_slider.height = height - verticalPadding * 2;
+  }
+
+  draw(ctx: CanvasRenderingContext2D) {
+    ctx.beginPath();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.50)";
+    ctx.rect(this.x, this.y, this.width, this.height);
+    ctx.fill();
+
+    ctx.fillStyle = `rgba(${this.red_slider.percent * 255}, 0, 0, 0.8)`;
+    this.red_slider.draw(ctx);
+
+    ctx.fillStyle = `rgba(0, ${this.green_slider.percent * 255}, 0, 0.8)`;
+    this.green_slider.draw(ctx);
+
+    ctx.fillStyle = `rgba(0, 0, ${this.blue_slider.percent * 255}, 0.8)`;
+    this.blue_slider.draw(ctx);
+
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(${this.red_slider.percent * 255}, ${
+      this.green_slider.percent * 255
+    }, ${this.blue_slider.percent * 255}, 1.0)`;
+    ctx.fillRect(
+      0.9 * this.width + this.x + horizontalPadding,
+      this.y + verticalPadding,
+      0.1 * this.width - 2 * horizontalPadding,
+      this.height - 2 * verticalPadding
+    );
+    ctx.fill();
+  }
+
+  updateController(): void {
+    this.controller.setColor(
+      `rgba(${this.red_slider.percent * 255},
+      ${this.green_slider.percent * 255},
+      ${this.blue_slider.percent * 255}, 1.0)`
+    );
+  }
+
+  handleDrag(pos: Vector): boolean {
     if (
       pos.x < this.x ||
       pos.x > this.x + this.width ||
       pos.y < this.y ||
       pos.y > this.y + this.height
     ) {
-      return;
+      return false;
     }
 
-    let currentX = this.x + this.padding;
-    const currentY = this.y + this.padding;
-    const widget_size = this.height - 2 * this.padding;
+    const redChange = this.red_slider.handleDrag(pos);
+    const greenChange = this.green_slider.handleDrag(pos);
+    const blueChange = this.blue_slider.handleDrag(pos);
 
-    for (let widget of this.widgets) {
-      if (
-        pos.x > currentX &&
-        pos.x < currentX + widget_size &&
-        pos.y > currentY &&
-        pos.y < currentY + widget_size
-      ) {
-        widget.selected = true;
-        widget.applyToCtrl(controller);
-      } else {
-        widget.selected = false;
-      }
-      currentX += widget_size + this.padding;
+    if (redChange || greenChange || blueChange) {
+      this.updateController();
+      return true;
     }
   }
+}
+
+class Slider {
+  percent = 0;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 
   draw(ctx: CanvasRenderingContext2D) {
     ctx.beginPath();
-    ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
     ctx.rect(this.x, this.y, this.width, this.height);
     ctx.fill();
 
-    let currentX = this.x + this.padding;
-    const currentY = this.y + this.padding;
-    const widget_size = this.height - 2 * this.padding;
-
-    for (let widget of this.widgets) {
-      if (widget.selected) {
-        ctx.beginPath();
-        ctx.strokeStyle = "white";
-        ctx.lineWidth = 5;
-        ctx.rect(currentX, currentY, widget_size, widget_size);
-        ctx.stroke();
-      }
-      widget.draw(ctx, currentX, currentY, widget_size, widget_size);
-      currentX += widget_size + this.padding;
-    }
-  }
-}
-
-interface Widget {
-  selected: boolean;
-  draw(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    width: number,
-    height: number
-  ): void;
-  applyToCtrl(controller: DrawingController): void;
-}
-
-class ColorSelector implements Widget {
-  selected: boolean = false;
-  color: string;
-
-  constructor(color: string) {
-    this.color = color;
-  }
-
-  draw(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    width: number,
-    height: number
-  ) {
     ctx.beginPath();
-    ctx.fillStyle = this.color;
-    ctx.rect(x, y, width, height);
+    ctx.fillStyle = "white";
+    ctx.rect(this.x + this.percent * this.width, this.y, 4, this.height);
     ctx.fill();
   }
 
-  applyToCtrl(controller: DrawingController): void {
-    controller.setColor(this.color);
+  handleDrag(pos: Vector): boolean {
+    if (pos.x < this.x || pos.x > this.x + this.width) {
+      return false;
+    }
+
+    this.percent = (pos.x - this.x) / this.width;
+    return true;
   }
 }
-
-// class SizeSelector implements Widget {
-//   selected: boolean = false;
-//   size: number;
-
-//   constructor(size: number) {
-//     this.size = size;
-//   }
-
-//   draw(
-//     ctx: CanvasRenderingContext2D,
-//     x: number,
-//     y: number,
-//     width: number,
-//     height: number
-//   ) {
-//     ctx.beginPath();
-//     ctx.fillStyle = "black";
-//     ctx.textAlign = "center";
-//     ctx.textBaseline = "middle";
-//     ctx.font = "30px Arial";
-//     ctx.fillText(this.size.toString(), x + width / 2, y + height / 2);
-//     ctx.fill();
-//   }
-
-//   applyToCtx(ctx: CanvasRenderingContext2D): void {
-//     ctx.lineWidth = this.size;
-//   }
-// }
 
 export { Menu, Widget, ColorSelector };

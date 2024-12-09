@@ -5,24 +5,54 @@ import {
   transformToCanvasCoords,
 } from "./handModel";
 import { Visualizer } from "./vis";
-import { detectFingers, detectShape, ClickDetector } from "./gestureDetector";
+import { detectFingers, detectShape, GestureDetector } from "./gestureDetector";
 import { ColorSelector, Menu } from "./menuItems";
 import { DrawingController } from "./drawing";
 
 const video = document.getElementById("webcam") as HTMLVideoElement;
 const canvasElement = document.getElementById("canvas") as HTMLCanvasElement;
 
-const ctx = canvasElement.getContext("2d");
-
-const vis = new Visualizer(ctx);
-
 let handModel: HandLandmarker;
 let menu: Menu;
 let cameraReady = false;
 let debug = false;
+let fullscreen = false;
 
 let WIDTH = 640;
 let HEIGHT = 480;
+
+let savedWidth = WIDTH;
+let savedHeight = HEIGHT;
+
+const ctx = canvasElement.getContext("2d");
+
+const vis = new Visualizer(ctx);
+
+const drawingController = new DrawingController(ctx);
+const rightGestureDetector = new GestureDetector("Right");
+const leftGestureDetector = new GestureDetector("Left");
+rightGestureDetector.onClick = (pos) => {
+  console.log("right click");
+  drawingController.handleRightClick(pos);
+};
+leftGestureDetector.onClick = (pos) => {
+  console.log("left click");
+  drawingController.handleLeftClick(pos);
+};
+rightGestureDetector.onDrag = (pos) => {
+  if (!menu.handleDrag(pos)) {
+    drawingController.handleRightDrag(pos);
+  }
+};
+rightGestureDetector.onDragStop = () => {
+  drawingController.stopRightDrag();
+};
+leftGestureDetector.onDrag = (pos) => {
+  drawingController.handleLeftDrag(pos);
+};
+leftGestureDetector.onDragStop = () => {
+  drawingController.stopLeftDrag();
+};
 
 function enableCamera() {
   // getUsermedia parameters.
@@ -30,7 +60,7 @@ function enableCamera() {
     video: {
       width: {
         min: 640,
-        ideal: 900,
+        ideal: 1280,
         max: 1920,
       },
     },
@@ -56,30 +86,7 @@ function configure() {
   HEIGHT = video.videoHeight;
 
   menu = new Menu(0, 0, WIDTH, 75);
-  const colorSection = menu.createSubsection();
-  colorSection.addWidget(new ColorSelector("red"));
-  colorSection.addWidget(new ColorSelector("blue"));
-  colorSection.addWidget(new ColorSelector("green"));
-
-  const utilsSection = menu.createSubsection();
-  // utilsSection.addWidget({
-  //   applyToCtx: (ctx: CanvasRenderingContext2D) => {
-  //     ctx.clearRect(0, 0, WIDTH, HEIGHT);
-  //   },
-  //   draw: (
-  //     ctx: CanvasRenderingContext2D,
-  //     x: number,
-  //     y: number,
-  //     width: number,
-  //     height: number
-  //   ) => {
-  //     ctx.beginPath();
-  //     ctx.rect(x, y, width, height);
-  //     ctx.fillStyle = "rgba(0, 0, 0, 0.50)";
-  //     ctx.fill();
-  //   },
-  //   selected: false,
-  // });
+  menu.addWidget(new ColorSelector(drawingController));
 }
 
 async function main() {
@@ -99,20 +106,29 @@ async function main() {
 window.addEventListener("keydown", (e) => {
   if (e.key === "d") {
     debug = !debug;
+  } else if (e.key === "f") {
+    if (fullscreen) {
+      WIDTH = savedWidth;
+      HEIGHT = savedHeight;
+    } else {
+      savedWidth = WIDTH;
+      savedHeight = HEIGHT;
+      HEIGHT = window.innerHeight * 0.99;
+    }
+    const videoAspectRatio = video.videoWidth / video.videoHeight;
+    WIDTH = HEIGHT * videoAspectRatio;
+    canvasElement.width = WIDTH;
+    canvasElement.height = HEIGHT;
+    video.width = WIDTH;
+    video.height = HEIGHT;
+
+    menu.setBBbox(0, 0, WIDTH, 0.1 * HEIGHT);
+
+    fullscreen = !fullscreen;
   }
 });
 
-const drawingController = new DrawingController(ctx);
-const rightClickDetector = new ClickDetector("Right");
-const leftClickDetector = new ClickDetector("Left");
-rightClickDetector.onClick = (pos) => {
-  console.log("right click");
-  menu.handleClick(drawingController, pos);
-  drawingController.handleRightClick(pos);
-};
-leftClickDetector.onClick = (pos) => {
-  drawingController.handleLeftClick(pos);
-};
+let depthHistory = [];
 
 async function loop() {
   if (!cameraReady) {
@@ -130,12 +146,25 @@ async function loop() {
     vis.setHands(hands);
     vis.drawConnections();
     vis.drawPoints();
-    vis.drawFingerLines();
+    vis.drawDebugLines();
+    vis.drawGraph(depthHistory);
+    //vis.drawFingerLines();
     ctx.restore();
   }
 
-  rightClickDetector.update(hands);
-  leftClickDetector.update(hands);
+  const landmarks = getLandmarksByName(hands, "Right");
+  if (!landmarks) {
+    depthHistory = [];
+  } else {
+    const fingers = detectFingers(landmarks);
+    depthHistory.push(fingers.index.top.depth);
+    if (depthHistory.length > 100) {
+      depthHistory.shift();
+    }
+  }
+
+  rightGestureDetector.update(hands);
+  leftGestureDetector.update(hands);
 
   drawingController.update(hands);
   menu.draw(ctx);

@@ -1,26 +1,26 @@
 import { HandLandmarkerResult } from "@mediapipe/tasks-vision";
 import {
+  detectFingers,
   detectShape,
   isPinching,
-  isThumbsUp,
-  zoomGesture,
+  isThumbsUpOrDown,
 } from "./gestureDetector";
 import { Vector } from "./vector";
-import { Polygon } from "./geometry";
+import { Polygon, Shape } from "./geometry";
+import { getLandmarksByName } from "./handModel";
 
 class DrawingController {
   ctx: CanvasRenderingContext2D;
   isDrawing = false;
-  eraserSize = 40;
 
   previousLeftPosition: Vector | null = null;
   previousRightPosition: Vector | null = null;
 
-  allShapes: Polygon[] = [];
-  currentShape: Polygon | null = null;
-  isEditingShape = false;
+  color = "black";
 
-  currentColor = "black";
+  allShapes: Shape[] = [];
+  currentShape: Shape | null = null;
+  isEditingShape = false;
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
@@ -29,6 +29,15 @@ class DrawingController {
   handleRightClick(pos: Vector) {
     if (this.isEditingShape) {
       this.currentShape.addVertex(pos);
+    } else {
+      for (let shape of this.allShapes.slice().reverse()) {
+        if (shape.isPointInside(pos)) {
+          shape.isEditing = true;
+          this.currentShape = shape;
+          this.isEditingShape = true;
+          break;
+        }
+      }
     }
   }
 
@@ -39,33 +48,17 @@ class DrawingController {
   }
 
   setColor(color: string) {
-    this.currentColor = color;
+    if (this.currentShape) {
+      this.currentShape.color = color;
+    }
+    this.color = color;
   }
-
-  // handleDraw(drawing: boolean, position: Vector) {
-  //   if (this.isPlacingShape) {
-  //     return;
-  //   }
-  //   if (!this.isDrawing && drawing) {
-  //     this.isDrawing = true;
-  //     this.drawingCtx.beginPath();
-  //   } else if (this.isDrawing && !drawing) {
-  //     this.isDrawing = false;
-  //     this.drawingCtx.closePath();
-  //   }
-  //   if (this.isDrawing) {
-  //     if (this.previousPosition.distanceTo(position) > 10) {
-  //       this.drawingCtx.lineTo(Math.round(position.x), Math.round(position.y));
-  //       this.drawingCtx.stroke();
-  //       this.previousPosition = position;
-  //     }
-  //   }
-  // }
 
   handleShapePlacement(hands: HandLandmarkerResult) {
     if (!this.isEditingShape) {
       const shape = detectShape(hands);
       if (shape) {
+        shape.color = this.color;
         this.currentShape = shape;
         this.isEditingShape = true;
         this.allShapes.push(shape);
@@ -73,22 +66,51 @@ class DrawingController {
     }
   }
 
+  handleRightDrag(pos: Vector) {
+    if (this.isEditingShape) {
+      if (this.previousRightPosition) {
+        this.currentShape.moveClosestVertex(this.previousRightPosition);
+        this.currentShape.changeRadius(this.previousRightPosition, pos);
+      }
+      this.previousRightPosition = pos;
+    }
+  }
+
+  handleLeftDrag(pos: Vector) {
+    if (this.isEditingShape) {
+      if (this.previousLeftPosition) {
+        const movement = pos.sub(this.previousLeftPosition);
+        this.currentShape.move(movement);
+      }
+      this.previousLeftPosition = pos;
+    }
+  }
+
+  stopLeftDrag() {
+    this.previousLeftPosition = null;
+  }
+
+  stopRightDrag() {
+    this.previousRightPosition = null;
+  }
+
   update(hands: HandLandmarkerResult) {
-    const [rightPinch, rightPosition] = isPinching(hands, "Right");
-    const [leftPinch, leftPosition] = isPinching(hands, "Left");
-    const thumbsUp = isThumbsUp(hands, "Right");
+    const rightFingers = detectFingers(getLandmarksByName(hands, "Right"));
+    const leftfingers = detectFingers(getLandmarksByName(hands, "Left"));
+
+    const [thumbUpOrDownRight, dirRight] = isThumbsUpOrDown(rightFingers);
+    const [thumbUpOrDownLeft, dirLeft] = isThumbsUpOrDown(leftfingers);
 
     if (this.isEditingShape) {
-      this.currentShape.color = this.currentColor;
-      if (thumbsUp) {
+      if (thumbUpOrDownRight && dirRight === "up") {
         this.currentShape.isEditing = false;
         this.isEditingShape = false;
         this.currentShape = null;
-      } else if (leftPinch && this.previousLeftPosition) {
-        const movement = leftPosition.sub(this.previousLeftPosition);
-        this.currentShape.move(movement);
-      } else if (rightPinch && this.previousRightPosition) {
-        this.currentShape.moveClosestVertex(this.previousRightPosition);
+      } else if (thumbUpOrDownLeft && dirLeft === "down") {
+        const index = this.allShapes.indexOf(this.currentShape);
+        this.allShapes.splice(index, 1);
+        this.isEditingShape = false;
+        this.currentShape = null;
       }
     }
 
@@ -97,9 +119,6 @@ class DrawingController {
     }
 
     this.handleShapePlacement(hands);
-
-    this.previousLeftPosition = leftPinch ? leftPosition : null;
-    this.previousRightPosition = rightPinch ? rightPosition : null;
   }
 }
 

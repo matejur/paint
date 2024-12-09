@@ -1,7 +1,7 @@
 import { HandLandmarkerResult, Landmark } from "@mediapipe/tasks-vision";
 import { getLandmarksByName } from "./handModel";
 import { Vector } from "./vector";
-import { Polygon } from "./drawing";
+import { Circle, Polygon } from "./geometry";
 
 const INDEX_TIP = 8;
 const THUMB = [1, 2, 3, 4];
@@ -17,7 +17,6 @@ const FINGERS = [
   { name: "pinky", points: PINKY },
 ];
 
-type Shape = "RECTANGLE" | "TRIANGLE";
 type HandName = "Left" | "Right";
 
 interface HandFingers {
@@ -49,17 +48,20 @@ interface Finger {
   base: FingerPart;
 }
 
-class ClickDetector {
+class GestureDetector {
   handName: HandName;
   depthHistory: number[];
-  onClick: (pos: Vector) => void;
 
-  historySize: number = 20;
+  historySize: number = 30;
 
   constructor(handName: HandName) {
     this.handName = handName;
     this.depthHistory = [];
   }
+
+  onClick(pos: Vector): void {}
+  onDrag(pos: Vector): void {}
+  onDragStop(): void {}
 
   update(results: HandLandmarkerResult) {
     const landmarks = getLandmarksByName(results, this.handName);
@@ -68,9 +70,21 @@ class ClickDetector {
       return;
     }
 
+    const wrist = new Vector(landmarks[0].x, landmarks[0].y);
+    const indexStart = new Vector(landmarks[INDEX[0]].x, landmarks[INDEX[0]].y);
+    const handSize = wrist.distanceTo(indexStart);
+
     const fingers = detectFingers(landmarks);
-    const select = isSelectGesture(fingers);
-    console.log(select);
+
+    const pinching = isPinching(fingers, handSize * 0.25);
+    if (pinching[0]) {
+      this.onDrag(pinching[1]);
+      return;
+    } else {
+      this.onDragStop();
+    }
+
+    const select = isSelectGesture(fingers, handSize * 0.5);
     if (select) {
       this.depthHistory.push(fingers.index.top.depth);
       if (this.depthHistory.length > this.historySize) {
@@ -81,39 +95,33 @@ class ClickDetector {
     }
 
     if (this.depthHistory.length === this.historySize) {
-      const first_part = this.depthHistory.slice(0, this.historySize * 0.75);
-      const second_part = this.depthHistory.slice(this.historySize * 0.75);
+      const first_part = this.depthHistory.slice(0, this.historySize * 0.9);
+      const second_part = this.depthHistory.slice(this.historySize * 0.9);
 
-      const first_avg = first_part.reduce((a, b) => a + b) / first_part.length;
-      const second_avg =
-        second_part.reduce((a, b) => a + b) / second_part.length;
-
-      const first_std = Math.sqrt(
-        first_part
-          .map((x) => Math.pow(x - first_avg, 2))
-          .reduce((a, b) => a + b) / first_part.length
-      );
-      const second_std = Math.sqrt(
-        second_part
-          .map((x) => Math.pow(x - second_avg, 2))
-          .reduce((a, b) => a + b) / second_part.length
-      );
-
-      if (
-        (first_avg - second_avg) * 1000 > 15 &&
-        first_std * 1000 < 3 &&
-        second_std * 1000 > 5
-      ) {
-        this.onClick(
-          new Vector(landmarks[INDEX_TIP].x, landmarks[INDEX_TIP].y)
-        );
+      const history_avg =
+        first_part.reduce((a, b) => a + b, 0) / first_part.length;
+      const min = Math.min(...second_part);
+      if (history_avg * 1.5 > min) {
+        this.onClick(fingers.index.tip);
         this.depthHistory = [];
       }
+
+      // if (
+      //   (first_avg - second_avg) * 1000 > 15 &&
+      //   first_std * 1000 < 3 &&
+      //   second_std * 1000 > 5
+      // ) {
+      //   this.onClick(
+      //     new Vector(landmarks[INDEX_TIP].x, landmarks[INDEX_TIP].y)
+      //   );
+      //   this.depthHistory = [];
+      // }
     }
   }
 }
 
 function detectFingers(landmarks: Landmark[]): HandFingers {
+  if (!landmarks) return undefined;
   let hand = {} as HandFingers;
   FINGERS.forEach((finger) => {
     const points = finger.points;
@@ -128,11 +136,47 @@ function detectFingers(landmarks: Landmark[]): HandFingers {
 
   return hand;
 }
-function detectShape(results: HandLandmarkerResult): Polygon | undefined {
+function detectShape(
+  results: HandLandmarkerResult
+): Circle | Polygon | undefined {
   const leftLandmarks = getLandmarksByName(results, "Left");
   const rightLandmarks = getLandmarksByName(results, "Right");
 
   if (!leftLandmarks || !rightLandmarks) {
+    if (rightLandmarks) {
+      const rightFingers = detectFingers(rightLandmarks);
+
+      const middleCurled = curled_finger(rightFingers.middle);
+      const ringCurled = curled_finger(rightFingers.ring);
+      const pinkyCurled = curled_finger(rightFingers.pinky);
+
+      const wrist = new Vector(rightLandmarks[0].x, rightLandmarks[0].y);
+      const indexStart = new Vector(
+        rightLandmarks[INDEX[0]].x,
+        rightLandmarks[INDEX[0]].y
+      );
+      const handSize = wrist.distanceTo(indexStart);
+
+      const thumbIndexTouching =
+        rightFingers.thumb.tip.distanceTo(rightFingers.index.tip) <
+        0.25 * handSize;
+
+      if (thumbIndexTouching && !middleCurled && !ringCurled && !pinkyCurled) {
+        const center = new Vector(
+          (rightLandmarks[INDEX[1]].x + rightLandmarks[THUMB[1]].x) / 2,
+          (rightLandmarks[INDEX[1]].y + rightLandmarks[THUMB[1]].y) / 2
+        );
+
+        const radius = new Vector(
+          rightLandmarks[INDEX_TIP].x,
+          rightLandmarks[INDEX_TIP].y
+        ).distanceTo(center);
+
+        if (radius > 30) {
+          return new Circle(center, radius);
+        }
+      }
+    }
     return;
   }
 
@@ -151,6 +195,7 @@ function detectShape(results: HandLandmarkerResult): Polygon | undefined {
   const angle2 = leftIndex.direction.angleTo(rightIndex.direction);
 
   if (angle1 > 170 && angle2 > 170) {
+    // RECTANGLE
     const topLeft = intersect(leftThumb, leftIndex);
     const bottomRight = intersect(rightThumb, rightIndex);
 
@@ -158,6 +203,7 @@ function detectShape(results: HandLandmarkerResult): Polygon | undefined {
     const bottomLeft = new Vector(topLeft.x, bottomRight.y);
     return new Polygon([topLeft, topRight, bottomRight, bottomLeft]);
   } else if (angle1 > 170 && angle2 > 70 && angle2 < 90) {
+    // TRIANGLE
     const peak = intersect(leftIndex, rightIndex);
     const left = intersect(leftThumb, leftIndex);
     const right = intersect(rightThumb, rightIndex);
@@ -173,12 +219,13 @@ function intersect(a: FingerPart, b: FingerPart): Vector {
 }
 
 function isPinching(
-  results: HandLandmarkerResult,
-  hand: HandName
+  fingers: HandFingers,
+  distThreshold: number
 ): [boolean, Vector] {
-  const [zoom, indexTip, thumbTip] = zoomGesture(results, hand);
+  if (!fingers) return [false, new Vector(0, 0)];
+  const [zoom, indexTip, thumbTip] = zoomGesture(fingers);
   const distance = indexTip.distanceTo(thumbTip);
-  if (zoom && distance < 50) {
+  if (zoom && distance < distThreshold) {
     const middle_x = (thumbTip.x + indexTip.x) / 2;
     const middle_y = (thumbTip.y + indexTip.y) / 2;
     return [true, new Vector(middle_x, middle_y)];
@@ -187,16 +234,8 @@ function isPinching(
   return [false, new Vector(0, 0)];
 }
 
-function zoomGesture(
-  results: HandLandmarkerResult,
-  hand: HandName
-): [boolean, Vector, Vector] {
-  const landmarks = getLandmarksByName(results, hand);
-  if (!landmarks) {
-    return [false, new Vector(0, 0), new Vector(0, 0)];
-  }
-
-  const fingers = detectFingers(landmarks);
+function zoomGesture(fingers: HandFingers): [boolean, Vector, Vector] {
+  if (!fingers) return [false, new Vector(0, 0), new Vector(0, 0)];
   const middle_curled = curled_finger(fingers.middle);
   const ring_curled = curled_finger(fingers.ring);
   const pinky_curled = curled_finger(fingers.pinky);
@@ -209,31 +248,36 @@ function zoomGesture(
 }
 
 function curled_finger(finger: Finger): boolean {
-  return finger.base.direction.dot(finger.top.direction) < 0;
+  return finger.base.direction.dot(finger.top.direction) < -0.3;
 }
 
-function isSelectGesture(fingers: HandFingers): boolean {
+function isSelectGesture(
+  fingers: HandFingers,
+  thumbIndexThreshold: number
+): boolean {
   const index_down = fingers.index.middle.direction.y > 0;
   const middle_down = fingers.middle.middle.direction.y > 0;
   const ring_down = fingers.ring.middle.direction.y > 0;
   const pinky_down = fingers.pinky.middle.direction.y > 0;
 
-  return !index_down && middle_down && ring_down && pinky_down;
+  const thumb_index_dist = fingers.thumb.tip.distanceTo(fingers.index.tip);
+
+  return (
+    !index_down &&
+    middle_down &&
+    ring_down &&
+    pinky_down &&
+    thumb_index_dist > thumbIndexThreshold
+  );
 }
 
 function below(fingerA: Finger, fingerB: Finger): boolean {
   return fingerA.tip.y > fingerB.tip.y;
 }
 
-function isThumbsUp(results: HandLandmarkerResult, hand: HandName): boolean {
-  const landmarks = getLandmarksByName(results, hand);
-  if (!landmarks) {
-    return false;
-  }
-
-  const fingers = detectFingers(landmarks);
-  if (fingers.thumb.top.direction.y > -0.9) return false;
-  if (Math.abs(fingers.index.top.direction.y) > 0.3) return false;
+function isThumbsUpOrDown(fingers: HandFingers): [boolean, "up" | "down"] {
+  if (!fingers) return [false, "up"];
+  if (Math.abs(fingers.index.top.direction.y) > 0.3) return [false, "up"];
 
   const thumb_curled = curled_finger(fingers.thumb);
   const index_curled = curled_finger(fingers.index);
@@ -241,21 +285,32 @@ function isThumbsUp(results: HandLandmarkerResult, hand: HandName): boolean {
   const ring_curled = curled_finger(fingers.ring);
   const pinky_curled = curled_finger(fingers.pinky);
 
-  return (
+  if (
     !thumb_curled &&
     index_curled &&
     middle_curled &&
     ring_curled &&
-    pinky_curled &&
-    below(fingers.index, fingers.thumb)
-  );
+    pinky_curled
+  ) {
+    if (
+      fingers.thumb.top.direction.y < -0.9 &&
+      below(fingers.index, fingers.thumb)
+    )
+      return [true, "up"];
+    if (
+      fingers.thumb.top.direction.y > 0.9 &&
+      below(fingers.thumb, fingers.index)
+    )
+      return [true, "down"];
+  }
+  return [false, "up"];
 }
 
 export {
   detectFingers,
   detectShape,
   isPinching,
-  ClickDetector,
+  GestureDetector,
   zoomGesture,
-  isThumbsUp,
+  isThumbsUpOrDown,
 };
