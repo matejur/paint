@@ -32,12 +32,14 @@ class FingerPart {
   direction: Vector;
   slope: number;
   intercept: number;
+  position: Vector;
 
   constructor(a: Landmark, b: Landmark) {
     this.slope = (b.y - a.y) / (b.x - a.x);
     this.intercept = a.y - this.slope * a.x;
     this.direction = new Vector(b.x - a.x, b.y - a.y).normalize();
     this.depth = (a.z + b.z) / 2;
+    this.position = new Vector(a.x, a.y);
   }
 }
 
@@ -85,6 +87,7 @@ class GestureDetector {
     }
 
     const select = isSelectGesture(fingers, handSize * 0.3);
+    console.log(select);
     if (select) {
       this.depthHistory.push(fingers.index.top.depth);
       if (this.depthHistory.length > this.historySize) {
@@ -94,7 +97,7 @@ class GestureDetector {
       this.depthHistory = [];
     }
 
-    if (this.depthHistory.length === this.historySize) {
+    if (select && this.depthHistory.length === this.historySize) {
       const first_part = this.depthHistory.slice(0, this.historySize * 0.9);
       const second_part = this.depthHistory.slice(this.historySize * 0.9);
 
@@ -255,27 +258,19 @@ function isSelectGesture(
   fingers: HandFingers,
   thumbIndexThreshold: number
 ): boolean {
-  const index_down = fingers.index.middle.direction.y > 0;
   const middle_down = fingers.middle.middle.direction.y > 0;
   const ring_down = fingers.ring.middle.direction.y > 0;
   const pinky_down = fingers.pinky.middle.direction.y > 0;
 
-  const thumb_index_dist = fingers.thumb.tip.distanceTo(fingers.index.tip);
-
-  console.log(
-    index_down,
-    middle_down,
-    ring_down,
-    pinky_down,
-    thumb_index_dist > thumbIndexThreshold
+  const thumb_middle_dist = fingers.thumb.tip.distanceTo(
+    fingers.middle.middle.position
   );
 
   return (
-    //!index_down &&
     middle_down &&
     ring_down &&
     pinky_down &&
-    thumb_index_dist > thumbIndexThreshold
+    thumb_middle_dist < thumbIndexThreshold
   );
 }
 

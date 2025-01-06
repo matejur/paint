@@ -1,3 +1,4 @@
+import { HEIGHT, WIDTH } from "./app";
 import { Vector } from "./vector";
 
 function closestPointOnLine(
@@ -32,10 +33,11 @@ interface Shape {
   removeVertex(clickPosition: Vector): void;
   moveClosestVertex(position: Vector): void;
   changeRadius(previous: Vector, current: Vector): void;
+  similarity(other: Shape): number;
 }
 
 class Circle implements Shape {
-  isEditing: boolean = true;
+  isEditing: boolean = false;
   center: Vector;
   radius: number;
   color = "black";
@@ -51,7 +53,7 @@ class Circle implements Shape {
 
   draw(ctx: CanvasRenderingContext2D) {
     if (this.isEditing) {
-      ctx.globalAlpha = 0.4;
+      ctx.globalAlpha = 0.8;
     }
 
     ctx.fillStyle = this.color;
@@ -59,7 +61,7 @@ class Circle implements Shape {
     ctx.arc(this.center.x, this.center.y, this.radius, 0, 2 * Math.PI);
     ctx.fill();
 
-    ctx.globalAlpha = 0.95;
+    ctx.globalAlpha = 0.8;
     if (this.isEditing) {
       ctx.fillStyle = "red";
       ctx.beginPath();
@@ -69,6 +71,44 @@ class Circle implements Shape {
       ctx.lineWidth = 4;
       ctx.stroke();
     }
+  }
+
+  similarity(other: Shape): number {
+    if (!(other instanceof Circle)) {
+      return 0;
+    }
+
+    const distance = this.center.distanceTo(other.center);
+    const radii = this.radius + other.radius;
+
+    if (distance > radii) {
+      return 0;
+    }
+
+    if (distance < Math.abs(this.radius - other.radius)) {
+      const smaller = Math.min(this.radius, other.radius);
+      const larger = Math.max(this.radius, other.radius);
+      return (Math.PI * smaller * smaller) / (Math.PI * larger * larger);
+    }
+    const r1 = this.radius;
+    const r2 = other.radius;
+    const alpha =
+      Math.acos(
+        (r1 * r1 + distance * distance - r2 * r2) / (2 * r1 * distance)
+      ) * 2;
+    const beta =
+      Math.acos(
+        (r2 * r2 + distance * distance - r1 * r1) / (2 * r2 * distance)
+      ) * 2;
+
+    const a1 = 0.5 * beta * r2 * r2 - 0.5 * r2 * r2 * Math.sin(beta);
+    const a2 = 0.5 * alpha * r1 * r1 - 0.5 * r1 * r1 * Math.sin(alpha);
+    const intersectionArea = a1 + a2;
+
+    return (
+      intersectionArea /
+      (Math.PI * r1 * r1 + Math.PI * r2 * r2 - intersectionArea)
+    );
   }
 
   isPointInside(point: Vector): boolean {
@@ -94,7 +134,7 @@ class Circle implements Shape {
 
 class Polygon implements Shape {
   vertices: Vector[] = [];
-  isEditing = true;
+  isEditing = false;
   color = "black";
 
   constructor(vertices: Vector[]) {
@@ -120,6 +160,13 @@ class Polygon implements Shape {
     ctx.fill();
 
     ctx.globalAlpha = 0.95;
+
+    for (let i = 0; i < this.vertices.length; i++) {
+      // Text to show the index of the vertex
+      ctx.fillStyle = "red";
+      ctx.font = "20px Arial";
+      ctx.fillText(i.toString(), this.vertices[i].x, this.vertices[i].y);
+    }
 
     if (!this.isEditing) {
       return;
@@ -218,6 +265,40 @@ class Polygon implements Shape {
   }
 
   changeRadius(previous: Vector, current: Vector): void {}
+
+  similarity(target: Shape): number {
+    if (!(target instanceof Polygon)) {
+      return 0;
+    }
+
+    const numVertices = this.vertices.length;
+    const otherNumVertices = target.vertices.length;
+
+    if (numVertices !== otherNumVertices) {
+      return 0;
+    }
+
+    let otherStartVertexIndex: number = 0;
+    let closestDistance = Infinity;
+    for (let i = 0; i < otherNumVertices; i++) {
+      const distance = this.vertices[0].distanceTo(target.vertices[i]);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        otherStartVertexIndex = i;
+      }
+    }
+
+    let error = 0;
+    for (let i = 0; i < numVertices; i++) {
+      const thisVertex = this.vertices[i];
+      const otherVertex =
+        target.vertices[(i + otherStartVertexIndex) % numVertices];
+      const dist = thisVertex.distanceTo(otherVertex);
+      error += dist;
+    }
+    const k = 2 * Math.sqrt(Math.sqrt(WIDTH * WIDTH + HEIGHT * HEIGHT));
+    return 100 / (1 + Math.exp(0.1 * (error - k)));
+  }
 }
 
 export { Polygon, Circle, Shape };

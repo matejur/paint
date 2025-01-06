@@ -87,10 +87,13 @@ class Visualizer {
       const landmarks = this.hands.landmarks[i];
 
       const fingers = detectFingers(landmarks);
-      const dist = fingers.thumb.tip.distanceTo(fingers.index.tip);
+      const dist = fingers.thumb.tip.distanceTo(fingers.middle.middle.position);
       this.ctx.beginPath();
       this.ctx.moveTo(fingers.thumb.tip.x, fingers.thumb.tip.y);
-      this.ctx.lineTo(fingers.index.tip.x, fingers.index.tip.y);
+      this.ctx.lineTo(
+        fingers.middle.middle.position.x,
+        fingers.middle.middle.position.y
+      );
       this.ctx.strokeStyle = "green";
       this.ctx.lineWidth = 4;
       this.ctx.stroke();

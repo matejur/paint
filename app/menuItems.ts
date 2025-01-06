@@ -148,9 +148,9 @@ class ColorSelector implements Widget {
 
   updateController(): void {
     this.controller.setColor(
-      `rgba(${this.red_slider.percent * 255},
-      ${this.green_slider.percent * 255},
-      ${this.blue_slider.percent * 255}, 1.0)`
+      `rgb(${Math.round(this.red_slider.percent * 255)}, ${Math.round(
+        this.green_slider.percent * 255
+      )}, ${Math.round(this.blue_slider.percent * 255)})`
     );
   }
 

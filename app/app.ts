@@ -8,6 +8,7 @@ import { Visualizer } from "./vis";
 import { detectFingers, detectShape, GestureDetector } from "./gestureDetector";
 import { ColorSelector, Menu } from "./menuItems";
 import { DrawingController } from "./drawing";
+import Game from "./game";
 
 const video = document.getElementById("webcam") as HTMLVideoElement;
 const canvasElement = document.getElementById("canvas") as HTMLCanvasElement;
@@ -28,7 +29,8 @@ const ctx = canvasElement.getContext("2d");
 
 const vis = new Visualizer(ctx);
 
-const drawingController = new DrawingController(ctx);
+const game = new Game();
+const drawingController = new DrawingController(ctx, game);
 const rightGestureDetector = new GestureDetector("Right");
 const leftGestureDetector = new GestureDetector("Left");
 rightGestureDetector.onClick = (pos) => {
@@ -60,7 +62,7 @@ function enableCamera() {
     video: {
       width: {
         min: 640,
-        ideal: 1280,
+        ideal: 900,
         max: 1920,
       },
     },
@@ -85,6 +87,9 @@ function configure() {
   WIDTH = video.videoWidth;
   HEIGHT = video.videoHeight;
 
+  game.setHeight(HEIGHT);
+  game.setWidth(WIDTH);
+
   menu = new Menu(0, 0, WIDTH, 75);
   menu.addWidget(new ColorSelector(drawingController));
 }
@@ -102,6 +107,8 @@ async function main() {
 
   requestAnimationFrame(loop);
 }
+
+let nextShape = false;
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "d") {
@@ -122,9 +129,14 @@ window.addEventListener("keydown", (e) => {
     video.width = WIDTH;
     video.height = HEIGHT;
 
+    game.setHeight(HEIGHT);
+    game.setWidth(WIDTH);
+
     menu.setBBbox(0, 0, WIDTH, 0.1 * HEIGHT);
 
     fullscreen = !fullscreen;
+  } else if (e.key === "n") {
+    nextShape = true;
   }
 });
 
@@ -147,7 +159,7 @@ async function loop() {
     vis.drawConnections();
     vis.drawPoints();
     //vis.drawDebugLines();
-    //vis.drawGraph(depthHistory);
+    vis.drawGraph(depthHistory);
     //vis.drawFingerLines();
     ctx.restore();
   }
@@ -166,9 +178,17 @@ async function loop() {
   rightGestureDetector.update(hands);
   leftGestureDetector.update(hands);
 
+  if (nextShape) {
+    game.nextShape();
+    nextShape = false;
+  }
+
+  game.draw(ctx);
   drawingController.update(hands);
   menu.draw(ctx);
   requestAnimationFrame(loop);
 }
 
 document.addEventListener("DOMContentLoaded", main);
+
+export { WIDTH, HEIGHT };

@@ -8,6 +8,7 @@ import {
 import { Vector } from "./vector";
 import { Polygon, Shape } from "./geometry";
 import { getLandmarksByName } from "./handModel";
+import Game from "./game";
 
 class DrawingController {
   ctx: CanvasRenderingContext2D;
@@ -22,8 +23,11 @@ class DrawingController {
   currentShape: Shape | null = null;
   isEditingShape = false;
 
-  constructor(ctx: CanvasRenderingContext2D) {
+  game: Game;
+
+  constructor(ctx: CanvasRenderingContext2D, game: Game) {
     this.ctx = ctx;
+    this.game = game;
   }
 
   handleRightClick(pos: Vector) {
@@ -59,6 +63,7 @@ class DrawingController {
       const shape = detectShape(hands);
       if (shape) {
         shape.color = this.color;
+        shape.isEditing = true;
         this.currentShape = shape;
         this.isEditingShape = true;
         this.allShapes.push(shape);
@@ -103,6 +108,7 @@ class DrawingController {
 
     if (this.isEditingShape) {
       if (thumbUpOrDownRight && dirRight === "up") {
+        this.game.checkShape(this.currentShape);
         this.currentShape.isEditing = false;
         this.isEditingShape = false;
         this.currentShape = null;
