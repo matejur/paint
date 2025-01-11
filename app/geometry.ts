@@ -34,6 +34,7 @@ interface Shape {
   moveClosestVertex(position: Vector): void;
   changeRadius(previous: Vector, current: Vector): void;
   similarity(other: Shape): number;
+  moveToPadded(minX: number, minY: number, maxX: number, maxY: number): void;
 }
 
 class Circle implements Shape {
@@ -70,6 +71,21 @@ class Circle implements Shape {
       ctx.strokeStyle = "red";
       ctx.lineWidth = 4;
       ctx.stroke();
+    }
+  }
+
+  moveToPadded(minX: number, minY: number, maxX: number, maxY: number): void {
+    if (this.center.x - this.radius < minX) {
+      this.center.x = minX + this.radius;
+    }
+    if (this.center.x + this.radius > maxX) {
+      this.center.x = maxX - this.radius;
+    }
+    if (this.center.y - this.radius < minY) {
+      this.center.y = minY + this.radius;
+    }
+    if (this.center.y + this.radius > maxY) {
+      this.center.y = maxY - this.radius;
     }
   }
 
@@ -147,7 +163,7 @@ class Polygon implements Shape {
 
   draw(ctx: CanvasRenderingContext2D) {
     if (this.isEditing) {
-      ctx.globalAlpha = 0.4;
+      ctx.globalAlpha = 0.8;
     }
 
     ctx.fillStyle = this.color;
@@ -159,7 +175,7 @@ class Polygon implements Shape {
     ctx.closePath();
     ctx.fill();
 
-    ctx.globalAlpha = 0.95;
+    ctx.globalAlpha = 0.8;
 
     for (let i = 0; i < this.vertices.length; i++) {
       // Text to show the index of the vertex
@@ -288,16 +304,82 @@ class Polygon implements Shape {
       }
     }
 
-    let error = 0;
+    let error1 = 0;
     for (let i = 0; i < numVertices; i++) {
       const thisVertex = this.vertices[i];
       const otherVertex =
         target.vertices[(i + otherStartVertexIndex) % numVertices];
       const dist = thisVertex.distanceTo(otherVertex);
-      error += dist;
+      error1 += dist;
     }
+
+    let error2 = 0;
+    for (let i = 0; i < numVertices; i++) {
+      const thisVertex = this.vertices[i];
+      const otherVertex =
+        target.vertices[
+          (numVertices - i + otherStartVertexIndex) % numVertices
+        ];
+      const dist = thisVertex.distanceTo(otherVertex);
+      error2 += dist;
+    }
+
+    const error = Math.min(error1, error2);
+
     const k = 2 * Math.sqrt(Math.sqrt(WIDTH * WIDTH + HEIGHT * HEIGHT));
     return 100 / (1 + Math.exp(0.1 * (error - k)));
+  }
+
+  rotate(angle: number) {
+    const center = this.vertices
+      .reduce((acc, vertex) => acc.add(vertex), new Vector(0, 0))
+      .mul(1 / this.vertices.length);
+
+    this.vertices = this.vertices.map((vertex) =>
+      vertex.rotateAround(center, angle)
+    );
+  }
+
+  getBBbox(): [number, number, number, number] {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (let vertex of this.vertices) {
+      if (vertex.x < minX) {
+        minX = vertex.x;
+      }
+      if (vertex.x > maxX) {
+        maxX = vertex.x;
+      }
+      if (vertex.y < minY) {
+        minY = vertex.y;
+      }
+      if (vertex.y > maxY) {
+        maxY = vertex.y;
+      }
+    }
+
+    return [minX, minY, maxX, maxY];
+  }
+
+  moveToPadded(minX: number, minY: number, maxX: number, maxY: number): void {
+    // move entire shape so that it fits within the bounding box
+    const boundingBox = this.getBBbox();
+
+    if (boundingBox[0] < minX) {
+      this.move(new Vector(minX - boundingBox[0], 0));
+    }
+    if (boundingBox[1] < minY) {
+      this.move(new Vector(0, minY - boundingBox[1]));
+    }
+    if (boundingBox[2] > maxX) {
+      this.move(new Vector(maxX - boundingBox[2], 0));
+    }
+    if (boundingBox[3] > maxY) {
+      this.move(new Vector(0, maxY - boundingBox[3]));
+    }
   }
 }
 

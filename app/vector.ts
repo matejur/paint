@@ -48,6 +48,17 @@ class Vector {
   distanceTo(vector: Vector): number {
     return Math.sqrt((this.x - vector.x) ** 2 + (this.y - vector.y) ** 2);
   }
+
+  rotateAround(center: Vector, angle: number): Vector {
+    const sin = Math.sin(angle);
+    const cos = Math.cos(angle);
+    const x = this.x - center.x;
+    const y = this.y - center.y;
+    return new Vector(
+      x * cos - y * sin + center.x,
+      x * sin + y * cos + center.y
+    );
+  }
 }
 
 export { Vector };

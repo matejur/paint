@@ -62,7 +62,7 @@ function enableCamera() {
     video: {
       width: {
         min: 640,
-        ideal: 900,
+        ideal: 1000,
         max: 1920,
       },
     },
@@ -179,7 +179,7 @@ async function loop() {
   leftGestureDetector.update(hands);
 
   if (nextShape) {
-    game.nextShape();
+    game.nextShape(ctx);
     nextShape = false;
   }
 

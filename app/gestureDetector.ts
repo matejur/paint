@@ -87,7 +87,6 @@ class GestureDetector {
     }
 
     const select = isSelectGesture(fingers, handSize * 0.3);
-    console.log(select);
     if (select) {
       this.depthHistory.push(fingers.index.top.depth);
       if (this.depthHistory.length > this.historySize) {
