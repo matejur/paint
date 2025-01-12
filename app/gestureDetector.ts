@@ -78,7 +78,7 @@ class GestureDetector {
 
     const fingers = detectFingers(landmarks);
 
-    const pinching = isPinching(fingers, handSize * 0.25);
+    const pinching = isPinching(fingers, handSize * 0.2);
     if (pinching[0]) {
       this.onDrag(pinching[1]);
       return;

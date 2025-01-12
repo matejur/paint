@@ -21,6 +21,7 @@ let fullscreen = false;
 
 let WIDTH = 640;
 let HEIGHT = 480;
+let DIAG = Math.sqrt(WIDTH * WIDTH + HEIGHT * HEIGHT);
 
 let savedWidth = WIDTH;
 let savedHeight = HEIGHT;
@@ -108,6 +109,11 @@ async function main() {
   requestAnimationFrame(loop);
 }
 
+function borderText(text: string, x: number, y: number) {
+  ctx.strokeText(text, x, y);
+  ctx.fillText(text, x, y);
+}
+
 let nextShape = false;
 
 window.addEventListener("keydown", (e) => {
@@ -134,6 +140,8 @@ window.addEventListener("keydown", (e) => {
 
     menu.setBBbox(0, 0, WIDTH, 0.1 * HEIGHT);
 
+    DIAG = Math.sqrt(WIDTH * WIDTH + HEIGHT * HEIGHT);
+
     fullscreen = !fullscreen;
   } else if (e.key === "n") {
     nextShape = true;
@@ -158,7 +166,7 @@ async function loop() {
     vis.setHands(hands);
     vis.drawConnections();
     vis.drawPoints();
-    //vis.drawDebugLines();
+    vis.drawDebugLines();
     vis.drawGraph(depthHistory);
     //vis.drawFingerLines();
     ctx.restore();
@@ -179,16 +187,46 @@ async function loop() {
   leftGestureDetector.update(hands);
 
   if (nextShape) {
-    game.nextShape(ctx);
+    game.nextShape();
     nextShape = false;
   }
 
-  game.draw(ctx);
+  game.drawShape(ctx);
   drawingController.update(hands);
   menu.draw(ctx);
+  game.drawText(ctx);
+
+  // white text with black outline
+  // bottom left corner
+  // quite big font
+  // scale with window size
+
+  ctx.font = "40px Arial";
+  ctx.fillStyle = "white";
+  ctx.strokeStyle = "black";
+  ctx.lineWidth = 2;
+
+  const aspect = WIDTH / HEIGHT;
+  const scaleX = WIDTH / 864;
+  const scaleY = HEIGHT / (864 / aspect);
+
+  ctx.save();
+  ctx.scale(scaleX, scaleY);
+  borderText(
+    "Colour: " + game.getColorDifficultyText(),
+    10,
+    HEIGHT / scaleY - 10
+  );
+  borderText(
+    "Shape: " + game.getShapeDifficultyText(),
+    10,
+    HEIGHT / scaleY - 50
+  );
+  ctx.restore();
+
   requestAnimationFrame(loop);
 }
 
 document.addEventListener("DOMContentLoaded", main);
 
-export { WIDTH, HEIGHT };
+export { WIDTH, HEIGHT, DIAG };

@@ -1,21 +1,19 @@
+import TextParticle from "./floatingText";
 import { Circle, Polygon, Shape } from "./geometry";
 import { Vector } from "./vector";
 
-function deltaToMessage(delta: number): string {
-  if (delta < 10) {
-    return "Perfect!";
+function getTextAndColor(score: number) {
+  if (score < 50) {
+    return ["Try again!", "red"];
+  } else if (score < 70) {
+    return ["Good job!", "orange"];
+  } else if (score < 85) {
+    return ["Great job!", "yellow"];
+  } else if (score < 99) {
+    return ["Excellent!", "green"];
+  } else {
+    return ["Perfect!", "blue"];
   }
-  if (delta < 20) {
-    return "Excelent!";
-  }
-  if (delta < 30) {
-    return "Good!";
-  }
-  if (delta < 40) {
-    return "Could be better!";
-  }
-
-  return "Not even close!";
 }
 
 function unpackColor(color: string): [number, number, number] {
@@ -60,6 +58,78 @@ function rgbToLab(r: number, g: number, b: number): [number, number, number] {
   return xyzToLab(x, y, z);
 }
 
+function randomCircle(cx: number, cy: number): Circle {
+  const radius = Math.random() * 50 + 75;
+  return new Circle(new Vector(cx, cy), radius);
+}
+
+function randomTriangle(cx: number, cy: number): Polygon {
+  const radius = Math.random() * 50 + 75;
+
+  // reverse sorted angles
+  let angles: number[] = [0, 0, 0];
+  let diff1: number, diff2: number, diff3: number;
+
+  do {
+    angles = [
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+    ].sort((a, b) => a - b);
+
+    diff1 = angles[1] - angles[0];
+    diff2 = angles[2] - angles[1];
+    diff3 = Math.PI * 2 - angles[2] + angles[0];
+  } while (diff1 < Math.PI / 2 || diff2 < Math.PI / 2 || diff3 < Math.PI / 2);
+
+  return new Polygon([
+    new Vector(
+      radius * Math.cos(angles[0]) + cx,
+      radius * Math.sin(angles[0]) + cy
+    ),
+    new Vector(
+      radius * Math.cos(angles[1]) + cx,
+      radius * Math.sin(angles[1]) + cy
+    ),
+    new Vector(
+      radius * Math.cos(angles[2]) + cx,
+      radius * Math.sin(angles[2]) + cy
+    ),
+  ]);
+}
+
+function randomRectangle(cx: number, cy: number): Polygon {
+  // Rectangle
+  const width = Math.random() * 50 + 75;
+  const height = Math.random() * 50 + 75;
+  const poly = new Polygon([
+    new Vector(cx - width / 2, cy - height / 2),
+    new Vector(cx + width / 2, cy - height / 2),
+    new Vector(cx + width / 2, cy + height / 2),
+    new Vector(cx - width / 2, cy + height / 2),
+  ]);
+
+  poly.rotate(Math.random() * Math.PI);
+  return poly;
+}
+
+function randomPoly(cx: number, cy: number): Polygon {
+  const numVertices = Math.floor(Math.random() * 3) + 5;
+  const vertices: Vector[] = [];
+  for (let i = 0; i < numVertices; i++) {
+    const angle = (i / numVertices) * Math.PI * 2;
+    const distance = Math.random() * 100 + 50;
+    vertices.push(
+      new Vector(
+        distance * Math.cos(angle) + cx,
+        distance * Math.sin(angle) + cy
+      )
+    );
+  }
+
+  return new Polygon(vertices);
+}
+
 class Game {
   private color: string;
 
@@ -68,12 +138,22 @@ class Game {
   private height: number;
   private width: number;
 
-  private colorDifficulty: number;
-  private shapeDifficulty: number;
+  private colorDifficulty: "EASY" | "MEDIUM" | "HARD";
+  private shapeDifficulty: "EASY" | "MEDIUM" | "HARD";
+
+  private texts: TextParticle[] = [];
 
   constructor() {
-    this.colorDifficulty = 1;
-    this.shapeDifficulty = 4;
+    this.colorDifficulty = "HARD";
+    this.shapeDifficulty = "HARD";
+  }
+
+  getColorDifficultyText(): string {
+    return this.colorDifficulty;
+  }
+
+  getShapeDifficultyText(): string {
+    return this.shapeDifficulty;
   }
 
   setWidth(width: number) {
@@ -85,9 +165,10 @@ class Game {
   }
 
   setRandomColor() {
-    const c1 = Math.floor(Math.pow(Math.random(), 0.75) * 256);
-    const c2 = Math.floor(Math.pow(Math.random(), 0.75) * 256);
-    const c3 = Math.floor(Math.pow(Math.random(), 0.75) * 256);
+    const colorSkew = 0.5;
+    const c1 = Math.floor(Math.pow(Math.random(), colorSkew) * 256);
+    const c2 = Math.floor(Math.pow(Math.random(), colorSkew) * 256);
+    const c3 = Math.floor(Math.pow(Math.random(), colorSkew) * 256);
 
     // 3 is the default case
     let r = c1;
@@ -95,14 +176,14 @@ class Game {
     let b = c3;
 
     switch (this.colorDifficulty) {
-      case 1:
+      case "EASY":
         const c = Math.floor(Math.random() * 3);
         console.log(c);
         r = c === 0 ? c1 : 0;
         g = c === 1 ? c2 : 0;
         b = c === 2 ? c3 : 0;
         break;
-      case 2:
+      case "MEDIUM":
         const combinations = [
           [c1, c2, 0],
           [c1, 0, c3],
@@ -116,83 +197,24 @@ class Game {
   }
 
   setRandomShape() {
-    // circle -> triangle -> rectangle -> random convex polygon
+    // circle -> triangle or rectangle -> random convex polygon
     const shapeCX = Math.random() * this.width;
     const shapeCY = Math.random() * this.height;
-    let radius = 0;
 
     switch (this.shapeDifficulty) {
-      case 1: // Circle
-        radius = Math.random() * 50 + 75;
-        this.shape = new Circle(new Vector(shapeCX, shapeCY), radius);
+      case "EASY": // Circle
+        this.shape = randomCircle(shapeCX, shapeCY);
         break;
-      case 2: // Triangle
-        radius = Math.random() * 50 + 75;
-        // reverse sorted angles
-        let angles: number[] = [0, 0, 0];
-        let diff1: number, diff2: number, diff3: number;
-
-        do {
-          angles = [
-            Math.random() * Math.PI * 2,
-            Math.random() * Math.PI * 2,
-            Math.random() * Math.PI * 2,
-          ].sort((a, b) => a - b);
-
-          diff1 = angles[1] - angles[0];
-          diff2 = angles[2] - angles[1];
-          diff3 = Math.PI * 2 - angles[2] + angles[0];
-        } while (
-          diff1 < Math.PI / 2 ||
-          diff2 < Math.PI / 2 ||
-          diff3 < Math.PI / 2
-        );
-
-        this.shape = new Polygon([
-          new Vector(
-            radius * Math.cos(angles[0]) + shapeCX,
-            radius * Math.sin(angles[0]) + shapeCY
-          ),
-          new Vector(
-            radius * Math.cos(angles[1]) + shapeCX,
-            radius * Math.sin(angles[1]) + shapeCY
-          ),
-          new Vector(
-            radius * Math.cos(angles[2]) + shapeCX,
-            radius * Math.sin(angles[2]) + shapeCY
-          ),
-        ]);
-        break;
-      case 3: // Rectangle
-        const width = Math.random() * 50 + 75;
-        const height = Math.random() * 50 + 75;
-        const poly = new Polygon([
-          new Vector(shapeCX - width / 2, shapeCY - height / 2),
-          new Vector(shapeCX + width / 2, shapeCY - height / 2),
-          new Vector(shapeCX + width / 2, shapeCY + height / 2),
-          new Vector(shapeCX - width / 2, shapeCY + height / 2),
-        ]);
-
-        poly.rotate(Math.random() * Math.PI);
-
-        this.shape = poly;
-        break;
-
-      case 4: // Random convex polygon
-        const numVertices = Math.floor(Math.random() * 3) + 5;
-        const vertices: Vector[] = [];
-        for (let i = 0; i < numVertices; i++) {
-          const angle = (i / numVertices) * Math.PI * 2;
-          const distance = Math.random() * 50 + 75;
-          vertices.push(
-            new Vector(
-              distance * Math.cos(angle) + shapeCX,
-              distance * Math.sin(angle) + shapeCY
-            )
-          );
+      case "MEDIUM": // Triangle or rectangle
+        if (Math.random() < 0.5) {
+          this.shape = randomTriangle(shapeCX, shapeCY);
+        } else {
+          this.shape = randomRectangle(shapeCX, shapeCY);
         }
+        break;
 
-        this.shape = new Polygon(vertices);
+      case "HARD": // Random convex polygon
+        this.shape = randomPoly(shapeCX, shapeCY);
         break;
     }
 
@@ -217,7 +239,7 @@ class Game {
       Math.pow(l - l2, 2) + Math.pow(a - a2, 2) + Math.pow(b - b2, 2)
     );
 
-    return deltaE;
+    return Math.max(103 - deltaE, 0);
   }
 
   checkShape(other: Shape) {
@@ -227,21 +249,49 @@ class Game {
     }
 
     const colorMatch = this.compareColor(other.color);
+    const similarity = this.shape.similarity(other);
+    const score = Math.floor((colorMatch + similarity) / 2);
     console.log("Color match:", colorMatch);
-    console.log("Similarity: ", this.shape.similarity(other));
+    console.log("Similarity: ", similarity);
+    console.log("Score: ", score);
+
+    const [text, color] = getTextAndColor(score);
+    const particle = new TextParticle(
+      other.getCenter().x,
+      other.getCenter().y,
+      -2 + Math.random() * (2 - -2 + 1),
+      -10,
+      text,
+      color,
+      30,
+      100
+    );
+
+    this.texts.push(particle);
   }
 
-  nextShape(ctx: CanvasRenderingContext2D) {
+  nextShape() {
     this.setRandomColor();
     this.setRandomShape();
   }
 
-  draw(ctx: CanvasRenderingContext2D) {
-    if (!this.shape) {
-      return;
+  drawShape(ctx: CanvasRenderingContext2D) {
+    if (this.shape) {
+      this.shape.draw(ctx);
+    }
+  }
+
+  drawText(ctx: CanvasRenderingContext2D) {
+    for (let i = 0; i < this.texts.length; i++) {
+      if (this.texts[i].update()) {
+        this.texts.splice(i, 1);
+        i--;
+      }
     }
 
-    this.shape.draw(ctx);
+    for (const text of this.texts) {
+      text.draw(ctx);
+    }
   }
 }
 

@@ -1,4 +1,4 @@
-import { HEIGHT, WIDTH } from "./app";
+import { DIAG, HEIGHT, WIDTH } from "./app";
 import { Vector } from "./vector";
 
 function closestPointOnLine(
@@ -35,6 +35,7 @@ interface Shape {
   changeRadius(previous: Vector, current: Vector): void;
   similarity(other: Shape): number;
   moveToPadded(minX: number, minY: number, maxX: number, maxY: number): void;
+  getCenter(): Vector;
 }
 
 class Circle implements Shape {
@@ -52,17 +53,17 @@ class Circle implements Shape {
     this.center = this.center.add(distance);
   }
 
-  draw(ctx: CanvasRenderingContext2D) {
-    if (this.isEditing) {
-      ctx.globalAlpha = 0.8;
-    }
+  getCenter(): Vector {
+    return this.center;
+  }
 
+  draw(ctx: CanvasRenderingContext2D) {
+    ctx.globalAlpha = 0.9;
     ctx.fillStyle = this.color;
     ctx.beginPath();
     ctx.arc(this.center.x, this.center.y, this.radius, 0, 2 * Math.PI);
     ctx.fill();
 
-    ctx.globalAlpha = 0.8;
     if (this.isEditing) {
       ctx.fillStyle = "red";
       ctx.beginPath();
@@ -94,37 +95,47 @@ class Circle implements Shape {
       return 0;
     }
 
-    const distance = this.center.distanceTo(other.center);
-    const radii = this.radius + other.radius;
-
-    if (distance > radii) {
-      return 0;
-    }
-
-    if (distance < Math.abs(this.radius - other.radius)) {
-      const smaller = Math.min(this.radius, other.radius);
-      const larger = Math.max(this.radius, other.radius);
-      return (Math.PI * smaller * smaller) / (Math.PI * larger * larger);
-    }
+    // 100 if the radii are the same
+    // less if they are different
+    // proportional to the difference in radii
+    // smaller diff -> higher similarity
     const r1 = this.radius;
     const r2 = other.radius;
-    const alpha =
-      Math.acos(
-        (r1 * r1 + distance * distance - r2 * r2) / (2 * r1 * distance)
-      ) * 2;
-    const beta =
-      Math.acos(
-        (r2 * r2 + distance * distance - r1 * r1) / (2 * r2 * distance)
-      ) * 2;
 
-    const a1 = 0.5 * beta * r2 * r2 - 0.5 * r2 * r2 * Math.sin(beta);
-    const a2 = 0.5 * alpha * r1 * r1 - 0.5 * r1 * r1 * Math.sin(alpha);
-    const intersectionArea = a1 + a2;
+    const similarity = (2 * r1 * r2) / (r1 * r1 + r2 * r2);
+    return similarity;
 
-    return (
-      intersectionArea /
-      (Math.PI * r1 * r1 + Math.PI * r2 * r2 - intersectionArea)
-    );
+    // const distance = this.center.distanceTo(other.center);
+    // const radii = this.radius + other.radius;
+
+    // if (distance > radii) {
+    //   return 0;
+    // }
+
+    // if (distance < Math.abs(this.radius - other.radius)) {
+    //   const smaller = Math.min(this.radius, other.radius);
+    //   const larger = Math.max(this.radius, other.radius);
+    //   return (Math.PI * smaller * smaller) / (Math.PI * larger * larger);
+    // }
+    // const r1 = this.radius;
+    // const r2 = other.radius;
+    // const alpha =
+    //   Math.acos(
+    //     (r1 * r1 + distance * distance - r2 * r2) / (2 * r1 * distance)
+    //   ) * 2;
+    // const beta =
+    //   Math.acos(
+    //     (r2 * r2 + distance * distance - r1 * r1) / (2 * r2 * distance)
+    //   ) * 2;
+
+    // const a1 = 0.5 * beta * r2 * r2 - 0.5 * r2 * r2 * Math.sin(beta);
+    // const a2 = 0.5 * alpha * r1 * r1 - 0.5 * r1 * r1 * Math.sin(alpha);
+    // const intersectionArea = a1 + a2;
+
+    // return (
+    //   intersectionArea /
+    //   (Math.PI * r1 * r1 + Math.PI * r2 * r2 - intersectionArea)
+    // );
   }
 
   isPointInside(point: Vector): boolean {
@@ -162,10 +173,7 @@ class Polygon implements Shape {
   }
 
   draw(ctx: CanvasRenderingContext2D) {
-    if (this.isEditing) {
-      ctx.globalAlpha = 0.8;
-    }
-
+    ctx.globalAlpha = 0.9;
     ctx.fillStyle = this.color;
     ctx.beginPath();
     ctx.moveTo(this.vertices[0].x, this.vertices[0].y);
@@ -175,14 +183,12 @@ class Polygon implements Shape {
     ctx.closePath();
     ctx.fill();
 
-    ctx.globalAlpha = 0.8;
-
-    for (let i = 0; i < this.vertices.length; i++) {
-      // Text to show the index of the vertex
-      ctx.fillStyle = "red";
-      ctx.font = "20px Arial";
-      ctx.fillText(i.toString(), this.vertices[i].x, this.vertices[i].y);
-    }
+    // for (let i = 0; i < this.vertices.length; i++) {
+    //   // Text to show the index of the vertex
+    //   ctx.fillStyle = "red";
+    //   ctx.font = "20px Arial";
+    //   ctx.fillText(i.toString(), this.vertices[i].x, this.vertices[i].y);
+    // }
 
     if (!this.isEditing) {
       return;
@@ -194,6 +200,12 @@ class Polygon implements Shape {
       ctx.arc(this.vertices[i].x, this.vertices[i].y, 5, 0, 2 * Math.PI);
       ctx.fill();
     }
+  }
+
+  getCenter(): Vector {
+    return this.vertices
+      .reduce((acc, vertex) => acc.add(vertex), new Vector(0, 0))
+      .mul(1 / this.vertices.length);
   }
 
   isPointInside(point: Vector): boolean {
@@ -239,7 +251,7 @@ class Polygon implements Shape {
 
     const { index, distance } = this.closestVertexIndex(position);
 
-    if (distance < 100) {
+    if (distance < DIAG * 0.05) {
       this.vertices[index] = position;
     }
   }
@@ -294,10 +306,20 @@ class Polygon implements Shape {
       return 0;
     }
 
+    // translate both to 0,0
+    const thisCenter = this.getCenter();
+    const targetCenter = target.getCenter();
+    const thisTranslated = this.vertices.map((vertex) =>
+      vertex.sub(thisCenter)
+    );
+    const targetTranslated = target.vertices.map((vertex) =>
+      vertex.sub(targetCenter)
+    );
+
     let otherStartVertexIndex: number = 0;
     let closestDistance = Infinity;
     for (let i = 0; i < otherNumVertices; i++) {
-      const distance = this.vertices[0].distanceTo(target.vertices[i]);
+      const distance = thisTranslated[0].distanceTo(targetTranslated[i]);
       if (distance < closestDistance) {
         closestDistance = distance;
         otherStartVertexIndex = i;
@@ -306,18 +328,18 @@ class Polygon implements Shape {
 
     let error1 = 0;
     for (let i = 0; i < numVertices; i++) {
-      const thisVertex = this.vertices[i];
+      const thisVertex = thisTranslated[i];
       const otherVertex =
-        target.vertices[(i + otherStartVertexIndex) % numVertices];
+        targetTranslated[(i + otherStartVertexIndex) % numVertices];
       const dist = thisVertex.distanceTo(otherVertex);
       error1 += dist;
     }
 
     let error2 = 0;
     for (let i = 0; i < numVertices; i++) {
-      const thisVertex = this.vertices[i];
+      const thisVertex = thisTranslated[i];
       const otherVertex =
-        target.vertices[
+        targetTranslated[
           (numVertices - i + otherStartVertexIndex) % numVertices
         ];
       const dist = thisVertex.distanceTo(otherVertex);
