@@ -99,11 +99,12 @@ class Circle implements Shape {
     // less if they are different
     // proportional to the difference in radii
     // smaller diff -> higher similarity
-    const r1 = this.radius;
-    const r2 = other.radius;
+    const area1 = this.radius * this.radius;
+    const area2 = other.radius * other.radius;
 
-    const similarity = (2 * r1 * r2) / (r1 * r1 + r2 * r2);
-    return similarity;
+    const similarity = 1 - Math.abs(area1 - area2) / Math.max(area1, area2);
+
+    return similarity * 100;
 
     // const distance = this.center.distanceTo(other.center);
     // const radii = this.radius + other.radius;

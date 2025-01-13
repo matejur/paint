@@ -54,7 +54,12 @@ class Menu {
         return true;
       }
     }
-    return false;
+    return (
+      pos.x > this.x &&
+      pos.x < this.x + this.width &&
+      pos.y > this.y &&
+      pos.y < this.y + this.height
+    );
   }
 
   draw(ctx: CanvasRenderingContext2D) {

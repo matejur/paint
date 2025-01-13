@@ -7,6 +7,7 @@ class TextParticle {
   opacity: number;
   text: string;
   life: number;
+  gravity: number;
   color = "white";
 
   constructor(
@@ -17,7 +18,8 @@ class TextParticle {
     text: string,
     color: string,
     size: number,
-    life: number
+    life: number,
+    gravity: number = 0.5
   ) {
     this.x = x;
     this.y = y;
@@ -27,12 +29,13 @@ class TextParticle {
     this.text = text;
     this.life = life;
     this.color = color;
+    this.gravity = gravity;
   }
 
   update(): boolean {
     this.x += this.vx;
     this.y += this.vy;
-    this.vy += 0.5;
+    this.vy += this.gravity;
     this.size += 2;
     this.life -= 1;
 

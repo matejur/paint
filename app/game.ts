@@ -1,3 +1,4 @@
+import { HEIGHT, WIDTH } from "./app";
 import TextParticle from "./floatingText";
 import { Circle, Polygon, Shape } from "./geometry";
 import { Vector } from "./vector";
@@ -14,6 +15,35 @@ function getTextAndColor(score: number) {
   } else {
     return ["Perfect!", "blue"];
   }
+}
+
+function progressBar(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  progress: number
+) {
+  ctx.fillStyle = "white";
+  ctx.fillRect(x, y, width, height);
+
+  ctx.fillStyle = "green";
+  ctx.fillRect(x, y, width * progress, height);
+}
+
+function borderText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  color: string = "white"
+) {
+  ctx.strokeStyle = "black";
+  ctx.fillStyle = color;
+  ctx.lineWidth = 2;
+  ctx.strokeText(text, x, y);
+  ctx.fillText(text, x, y);
 }
 
 function unpackColor(color: string): [number, number, number] {
@@ -141,11 +171,19 @@ class Game {
   private colorDifficulty: "EASY" | "MEDIUM" | "HARD";
   private shapeDifficulty: "EASY" | "MEDIUM" | "HARD";
 
+  private colorPoints: number = 0;
+  private shapePoints: number = 0;
+
+  private pointsPerLevel: number = 200;
+
+  private showColorLevelUpFrames: number = 0;
+  private showShapeLevelUpFrames: number = 0;
+
   private texts: TextParticle[] = [];
 
   constructor() {
-    this.colorDifficulty = "HARD";
-    this.shapeDifficulty = "HARD";
+    this.colorDifficulty = "EASY";
+    this.shapeDifficulty = "EASY";
   }
 
   getColorDifficultyText(): string {
@@ -154,6 +192,14 @@ class Game {
 
   getShapeDifficultyText(): string {
     return this.shapeDifficulty;
+  }
+
+  getColorProgress(): number {
+    return Math.min(this.colorPoints / this.pointsPerLevel, 1);
+  }
+
+  getShapeProgress(): number {
+    return Math.min(this.shapePoints / this.pointsPerLevel, 1);
   }
 
   setWidth(width: number) {
@@ -242,18 +288,42 @@ class Game {
     return Math.max(103 - deltaE, 0);
   }
 
-  checkShape(other: Shape) {
-    if (other.constructor.name != this.shape.constructor.name) {
-      console.log("Wrong shape TODO");
-      return;
+  nextDifficulty(
+    current: "EASY" | "MEDIUM" | "HARD"
+  ): "EASY" | "MEDIUM" | "HARD" {
+    switch (current) {
+      case "EASY":
+        return "MEDIUM";
+      case "MEDIUM":
+        return "HARD";
+      case "HARD":
+        return "HARD";
+    }
+  }
+
+  updateDifficulty(shapePoints: number, colorPoints: number) {
+    this.shapePoints += shapePoints;
+    this.colorPoints += colorPoints;
+
+    if (this.shapePoints > this.pointsPerLevel) {
+      this.shapePoints = 0;
+      this.shapeDifficulty = this.nextDifficulty(this.shapeDifficulty);
+
+      this.showShapeLevelUpFrames = 100;
     }
 
+    if (this.colorPoints > this.pointsPerLevel) {
+      this.colorPoints = 0;
+      this.colorDifficulty = this.nextDifficulty(this.colorDifficulty);
+
+      this.showColorLevelUpFrames = 100;
+    }
+  }
+
+  checkShape(other: Shape) {
     const colorMatch = this.compareColor(other.color);
-    const similarity = this.shape.similarity(other);
-    const score = Math.floor((colorMatch + similarity) / 2);
-    console.log("Color match:", colorMatch);
-    console.log("Similarity: ", similarity);
-    console.log("Score: ", score);
+    const shapeMatch = this.shape.similarity(other);
+    const score = Math.floor((colorMatch + shapeMatch) / 2);
 
     const [text, color] = getTextAndColor(score);
     const particle = new TextParticle(
@@ -268,6 +338,10 @@ class Game {
     );
 
     this.texts.push(particle);
+
+    this.updateDifficulty(shapeMatch, colorMatch);
+
+    this.nextShape();
   }
 
   nextShape() {
@@ -292,6 +366,97 @@ class Game {
     for (const text of this.texts) {
       text.draw(ctx);
     }
+
+    ctx.font = "40px Arial";
+    ctx.fillStyle = "white";
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 2;
+
+    const aspect = WIDTH / HEIGHT;
+    const scaleX = WIDTH / 864;
+    const scaleY = HEIGHT / (864 / aspect);
+
+    ctx.save();
+    ctx.scale(scaleX, scaleY);
+    const maxTextWidth = ctx.measureText("Colour: MEDIUM").width;
+    const progressBarWidth = WIDTH / scaleX - maxTextWidth - 50;
+    borderText(
+      ctx,
+      "Colour: " + this.getColorDifficultyText(),
+      10,
+      HEIGHT / scaleY - 10
+    );
+    progressBar(
+      ctx,
+      maxTextWidth + 20,
+      HEIGHT / scaleY - 40,
+      progressBarWidth,
+      35,
+      this.getColorProgress()
+    );
+
+    borderText(
+      ctx,
+      "Shape: " + this.getShapeDifficultyText(),
+      10,
+      HEIGHT / scaleY - 50
+    );
+
+    progressBar(
+      ctx,
+      maxTextWidth + 20,
+      HEIGHT / scaleY - 80,
+      progressBarWidth,
+      35,
+      this.getShapeProgress()
+    );
+
+    if (this.showColorLevelUpFrames > 0) {
+      let alpha = 1;
+
+      if (this.showColorLevelUpFrames < 50) {
+        alpha = this.showColorLevelUpFrames / 50;
+      }
+
+      ctx.globalAlpha = alpha;
+      borderText(
+        ctx,
+        "Level up!",
+        maxTextWidth +
+          20 +
+          progressBarWidth / 2 -
+          ctx.measureText("Level up!").width / 2,
+        HEIGHT / scaleY - 10,
+        "red"
+      );
+      ctx.globalAlpha = 1;
+
+      this.showColorLevelUpFrames--;
+    }
+
+    if (this.showShapeLevelUpFrames > 0) {
+      let alpha = 1;
+
+      if (this.showColorLevelUpFrames < 50) {
+        alpha = this.showColorLevelUpFrames / 50;
+      }
+
+      ctx.globalAlpha = alpha;
+      borderText(
+        ctx,
+        "Level up!",
+        maxTextWidth +
+          20 +
+          progressBarWidth / 2 -
+          ctx.measureText("Level up!").width / 2,
+        HEIGHT / scaleY - 50,
+        "red"
+      );
+      ctx.globalAlpha = 1;
+
+      this.showShapeLevelUpFrames--;
+    }
+    ctx.restore();
   }
 }
 
