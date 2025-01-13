@@ -1,4 +1,4 @@
-import { HEIGHT, WIDTH } from "./app";
+import { DIAG, HEIGHT, WIDTH } from "./app";
 import TextParticle from "./floatingText";
 import { Circle, Polygon, Shape } from "./geometry";
 import { Vector } from "./vector";
@@ -89,12 +89,14 @@ function rgbToLab(r: number, g: number, b: number): [number, number, number] {
 }
 
 function randomCircle(cx: number, cy: number): Circle {
-  const radius = Math.random() * 50 + 75;
+  const normalized = DIAG / 15;
+  const radius = Math.random() * normalized + normalized;
   return new Circle(new Vector(cx, cy), radius);
 }
 
 function randomTriangle(cx: number, cy: number): Polygon {
-  const radius = Math.random() * 50 + 75;
+  const normalized = DIAG / 15;
+  const radius = Math.random() * normalized + normalized;
 
   // reverse sorted angles
   let angles: number[] = [0, 0, 0];
@@ -129,9 +131,10 @@ function randomTriangle(cx: number, cy: number): Polygon {
 }
 
 function randomRectangle(cx: number, cy: number): Polygon {
+  const normalized = DIAG / 15;
   // Rectangle
-  const width = Math.random() * 50 + 75;
-  const height = Math.random() * 50 + 75;
+  const width = Math.random() * normalized + normalized;
+  const height = Math.random() * normalized + normalized;
   const poly = new Polygon([
     new Vector(cx - width / 2, cy - height / 2),
     new Vector(cx + width / 2, cy - height / 2),
@@ -144,11 +147,12 @@ function randomRectangle(cx: number, cy: number): Polygon {
 }
 
 function randomPoly(cx: number, cy: number): Polygon {
+  const normalized = DIAG / 15;
   const numVertices = Math.floor(Math.random() * 3) + 5;
   const vertices: Vector[] = [];
   for (let i = 0; i < numVertices; i++) {
     const angle = (i / numVertices) * Math.PI * 2;
-    const distance = Math.random() * 100 + 50;
+    const distance = Math.random() * normalized + normalized;
     vertices.push(
       new Vector(
         distance * Math.cos(angle) + cx,
@@ -174,7 +178,7 @@ class Game {
   private colorPoints: number = 0;
   private shapePoints: number = 0;
 
-  private pointsPerLevel: number = 200;
+  private pointsPerLevel: number = 400;
 
   private showColorLevelUpFrames: number = 0;
   private showShapeLevelUpFrames: number = 0;
@@ -224,7 +228,6 @@ class Game {
     switch (this.colorDifficulty) {
       case "EASY":
         const c = Math.floor(Math.random() * 3);
-        console.log(c);
         r = c === 0 ? c1 : 0;
         g = c === 1 ? c2 : 0;
         b = c === 2 ? c3 : 0;
@@ -263,14 +266,12 @@ class Game {
         this.shape = randomPoly(shapeCX, shapeCY);
         break;
     }
-
     const paddingX = this.width / 10;
-    const paddingY = this.height / 10;
-    const menuPadding = 75;
+    const paddingY = this.height / 5;
 
     this.shape.moveToPadded(
       paddingX,
-      paddingY + menuPadding,
+      paddingY,
       this.width - paddingX,
       this.height - paddingY
     );
@@ -310,6 +311,7 @@ class Game {
       this.shapeDifficulty = this.nextDifficulty(this.shapeDifficulty);
 
       this.showShapeLevelUpFrames = 100;
+      console.log("Shape level up!");
     }
 
     if (this.colorPoints > this.pointsPerLevel) {
@@ -317,10 +319,14 @@ class Game {
       this.colorDifficulty = this.nextDifficulty(this.colorDifficulty);
 
       this.showColorLevelUpFrames = 100;
+      console.log("Color level up!");
     }
   }
 
   checkShape(other: Shape) {
+    if (!this.shape) {
+      return;
+    }
     const colorMatch = this.compareColor(other.color);
     const shapeMatch = this.shape.similarity(other);
     const score = Math.floor((colorMatch + shapeMatch) / 2);
@@ -333,8 +339,8 @@ class Game {
       -10,
       text,
       color,
-      30,
-      100
+      50,
+      200
     );
 
     this.texts.push(particle);
@@ -437,8 +443,8 @@ class Game {
     if (this.showShapeLevelUpFrames > 0) {
       let alpha = 1;
 
-      if (this.showColorLevelUpFrames < 50) {
-        alpha = this.showColorLevelUpFrames / 50;
+      if (this.showShapeLevelUpFrames < 50) {
+        alpha = this.showShapeLevelUpFrames / 50;
       }
 
       ctx.globalAlpha = alpha;

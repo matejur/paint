@@ -90,8 +90,8 @@ class ColorSelector implements Widget {
 
   constructor(controller: DrawingController) {
     this.controller = controller;
-    this.red_slider.percent = 0;
-    this.green_slider.percent = 0.5;
+    this.red_slider.percent = 1;
+    this.green_slider.percent = 1;
     this.blue_slider.percent = 1;
     this.updateController();
   }

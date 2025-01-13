@@ -19,7 +19,7 @@ class TextParticle {
     color: string,
     size: number,
     life: number,
-    gravity: number = 0.5
+    gravity: number = 0.4
   ) {
     this.x = x;
     this.y = y;

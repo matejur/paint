@@ -5,7 +5,11 @@ import {
   transformToCanvasCoords,
 } from "./handModel";
 import { Visualizer } from "./vis";
-import { detectFingers, detectShape, GestureDetector } from "./gestureDetector";
+import {
+  detectFingers,
+  GestureDetector,
+  isThumbsUpOrDown,
+} from "./gestureDetector";
 import { ColorSelector, Menu } from "./menuItems";
 import { DrawingController } from "./drawing";
 import Game from "./game";
@@ -63,7 +67,7 @@ function enableCamera() {
     video: {
       width: {
         min: 640,
-        ideal: 1000,
+        ideal: 1920,
         max: 1920,
       },
     },
@@ -110,6 +114,7 @@ async function main() {
 }
 
 let nextShape = false;
+let gameStarted = false;
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "d") {
@@ -190,6 +195,27 @@ async function loop() {
   drawingController.update(hands);
   menu.draw(ctx);
   game.drawText(ctx);
+
+  if (!gameStarted) {
+    ctx.save();
+    const rightFingers = detectFingers(getLandmarksByName(hands, "Right"));
+    const [thumbUpOrDownRight, dirRight] = isThumbsUpOrDown(rightFingers);
+
+    if (thumbUpOrDownRight && dirRight === "up") {
+      gameStarted = true;
+      nextShape = true;
+    }
+
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    ctx.globalAlpha = 1;
+    ctx.font = "40px Arial";
+    ctx.fillStyle = "white";
+    ctx.textAlign = "center";
+    ctx.fillText("Right hand thumbs up to start", WIDTH / 2, HEIGHT / 2);
+    ctx.restore();
+  }
 
   requestAnimationFrame(loop);
 }
